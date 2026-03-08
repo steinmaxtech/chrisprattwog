@@ -1,5 +1,19 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const sbFetch = (path, opts = {}) => fetch(`${SUPABASE_URL}/rest/v1${path}`, {
+  ...opts,
+  headers: {
+    "apikey": SUPABASE_KEY,
+    "Authorization": `Bearer ${SUPABASE_KEY}`,
+    "Content-Type": "application/json",
+    "Prefer": opts.prefer || "",
+    ...(opts.headers || {})
+  }
+});
+
 // WO type metadata — structure only, no hardcoded values
 const WO_TYPES = {
   LVL:  { label: "LVL — Low Voltage Lead",          siteIdSuffix: "LVL(1)", numTechs: 1, numDays: 3, useBundle: true  },
@@ -159,12 +173,12 @@ export default function App() {
   const [pendingTidLabel, setPendingTidLabel] = useState(null); // {type, id} waiting for label
   const [tidLabelInput, setTidLabelInput] = useState("");
 
-  // Load saved template ID history from storage on mount
+  // Load saved template ID history from Supabase on mount
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("templateIdHistory");
-      if (saved) setTemplateIdHistory(JSON.parse(saved));
-    } catch {}
+    sbFetch("/template_id_history?id=eq.1&select=data")
+      .then(r => r.ok ? r.json() : null)
+      .then(rows => { if (rows?.[0]?.data) setTemplateIdHistory(rows[0].data); })
+      .catch(() => {});
   }, []);
 
   const saveTemplateId = (type, id, label = "") => {
@@ -174,7 +188,11 @@ export default function App() {
       const entry = { id, label: label.trim() };
       const updated = [entry, ...existing.filter(x => x.id !== id)].slice(0, 10);
       const next = { ...prev, [type]: updated };
-      try { localStorage.setItem("templateIdHistory", JSON.stringify(next)); } catch {}
+      sbFetch("/template_id_history?id=eq.1", {
+        method: "PATCH",
+        prefer: "return=minimal",
+        body: JSON.stringify({ data: next, updated_at: new Date().toISOString() })
+      }).catch(() => {});
       return next;
     });
   };
