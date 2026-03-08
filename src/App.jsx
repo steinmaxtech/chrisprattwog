@@ -363,7 +363,17 @@ export default function App() {
 
     const firstRow = lines[0].map(h => h.toLowerCase().replace(/[^a-z]/g, ""));
     const isBuildingFormat = firstRow.some(h => h === "buildingcode" || h === "buildingname");
-    const isHeaderRow = (row) => row.some(h => /^[a-zA-Z]{4,}/.test(h) && isNaN(h));
+    const HEADER_WORDS = ["code","name","address","city","state","zip","branch","building","date","site","location"];
+    const isHeaderRow = (row) => {
+      if (!row.length) return false;
+      const first = (row[0] || "").trim().toLowerCase();
+      // Looks like a building code (e.g. FB01, ABC123) — definitely data
+      if (/^[a-z]{1,4}\d/.test(first)) return false;
+      // All cells are word-like labels with no digits
+      const labelLike = row.filter(h => h.trim()).every(h => /^[a-zA-Z\s]+$/.test(h.trim()));
+      const hasKnownLabel = row.some(h => HEADER_WORDS.includes(h.trim().toLowerCase()));
+      return labelLike && hasKnownLabel;
+    };
 
     let parsed;
 
