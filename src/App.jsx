@@ -247,6 +247,10 @@ export default function App() {
   }, [authed]);
   const [templateIdHistory, setTemplateIdHistory] = useState({});   // { LVL: [{id, label}, ...], ... }
   const [showTidDropdown, setShowTidDropdown] = useState(false);
+  const [projectIdHistory, setProjectIdHistory] = useState([]);
+  const [displayNameHistory, setDisplayNameHistory] = useState([]);
+  const [showPidDropdown, setShowPidDropdown] = useState(false);
+  const [showDnDropdown, setShowDnDropdown] = useState(false);
   const [pendingTidLabel, setPendingTidLabel] = useState(null); // {type, id} waiting for label
   const [tidLabelInput, setTidLabelInput] = useState("");
 
@@ -255,6 +259,15 @@ export default function App() {
     sbFetch("/template_id_history?id=eq.1&select=data")
       .then(r => r.ok ? r.json() : null)
       .then(rows => { if (rows?.[0]?.data) setTemplateIdHistory(rows[0].data); })
+      .catch(() => {});
+    sbFetch("/project_history?id=eq.1&select=project_ids,display_names")
+      .then(r => r.ok ? r.json() : null)
+      .then(rows => {
+        if (rows?.[0]) {
+          if (rows[0].project_ids) setProjectIdHistory(rows[0].project_ids);
+          if (rows[0].display_names) setDisplayNameHistory(rows[0].display_names);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -274,6 +287,24 @@ export default function App() {
     });
   };
 
+  const saveProjectId = (id) => {
+    if (!id.trim()) return;
+    setProjectIdHistory(prev => {
+      const updated = [id, ...prev.filter(x => x !== id)].slice(0, 15);
+      sbFetch("/project_history?id=eq.1", { method: "PATCH", prefer: "return=minimal", body: JSON.stringify({ project_ids: updated, updated_at: new Date().toISOString() }) }).catch(() => {});
+      return updated;
+    });
+  };
+
+  const saveDisplayName = (name) => {
+    if (!name.trim()) return;
+    setDisplayNameHistory(prev => {
+      const updated = [name, ...prev.filter(x => x !== name)].slice(0, 15);
+      sbFetch("/project_history?id=eq.1", { method: "PATCH", prefer: "return=minimal", body: JSON.stringify({ display_names: updated, updated_at: new Date().toISOString() }) }).catch(() => {});
+      return updated;
+    });
+  };
+
   const getEntryLabel = (type, id) => {
     const entries = templateIdHistory[type] || [];
     const entry = entries.find(e => (typeof e === "string" ? e : e.id) === id);
@@ -282,6 +313,8 @@ export default function App() {
   };
 
   const handleContinueStep0 = () => {
+    saveProjectId(projectId);
+    if (displayName.trim()) saveDisplayName(displayName);
     const id = woConfig.templateId.trim();
     if (!id) { setStep(s => { setJoke(JOKES[Math.floor(Math.random() * JOKES.length)]); return s + 1; }); return; }
     const existing = (templateIdHistory[woType] || []).find(e => (typeof e === "string" ? e : e.id) === id);
@@ -673,10 +706,34 @@ export default function App() {
           <div style={{ display: "grid", gap: 16 }}>
             <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
               <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Project ID</label>
-              <input style={T.inp} placeholder="e.g. 10035574 - 4569395 - PNC - First Bank Conversion" value={projectId} onChange={e => setProjectId(e.target.value)} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => e.target.style.borderColor=T.border2} />
+              <div style={{ position: "relative" }}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input style={{ ...T.inp, flex: 1 }} placeholder="e.g. 10035574 - 4569395 - PNC - First Bank Conversion" value={projectId} onChange={e => setProjectId(e.target.value)} onFocus={e => { e.target.style.borderColor=T.accent; }} onBlur={e => { e.target.style.borderColor=T.border2; setTimeout(() => setShowPidDropdown(false), 150); }} />
+                  {projectIdHistory.length > 0 && <button onClick={() => setShowPidDropdown(d => !d)} style={{ background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "0 10px", color: T.textMid, cursor: "pointer", fontSize: 13, flexShrink: 0 }} title="Recent project IDs">▾</button>}
+                </div>
+                {showPidDropdown && projectIdHistory.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 7, zIndex: 100, marginTop: 3, maxHeight: 200, overflowY: "auto" }}>
+                    {projectIdHistory.map(pid => (
+                      <div key={pid} onClick={() => { setProjectId(pid); setShowPidDropdown(false); }} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, color: T.textMid, borderBottom: `1px solid ${T.border}` }} onMouseEnter={e => e.currentTarget.style.background=T.rowHover} onMouseLeave={e => e.currentTarget.style.background="transparent"}>{pid}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div style={{ fontSize: 11, color: T.textFaint, marginTop: 6 }}>Example: <span style={{ color: T.accentHi }}>10035574 - 4569395 - PNC - First Bank Conversion</span></div>
               <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6, marginTop: 14 }}>Location Display Name Prefix</label>
-              <input style={T.inp} placeholder="e.g. PNC - FB Conversion (H1)" value={displayName} onChange={e => setDisplayName(e.target.value)} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => e.target.style.borderColor=T.border2} />
+              <div style={{ position: "relative" }}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input style={{ ...T.inp, flex: 1 }} placeholder="e.g. PNC - FB Conversion (H1)" value={displayName} onChange={e => setDisplayName(e.target.value)} onFocus={e => { e.target.style.borderColor=T.accent; }} onBlur={e => { e.target.style.borderColor=T.border2; setTimeout(() => setShowDnDropdown(false), 150); }} />
+                  {displayNameHistory.length > 0 && <button onClick={() => setShowDnDropdown(d => !d)} style={{ background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "0 10px", color: T.textMid, cursor: "pointer", fontSize: 13, flexShrink: 0 }} title="Recent prefixes">▾</button>}
+                </div>
+                {showDnDropdown && displayNameHistory.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 7, zIndex: 100, marginTop: 3, maxHeight: 200, overflowY: "auto" }}>
+                    {displayNameHistory.map(dn => (
+                      <div key={dn} onClick={() => { setDisplayName(dn); setShowDnDropdown(false); }} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, color: T.textMid, borderBottom: `1px solid ${T.border}` }} onMouseEnter={e => e.currentTarget.style.background=T.rowHover} onMouseLeave={e => e.currentTarget.style.background="transparent"}>{dn}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div style={{ fontSize: 11, color: T.textFaint, marginTop: 6 }}>Used as prefix in Location Display Name and Location Name columns · defaults to Project ID if blank</div>
             </div>
 
@@ -923,9 +980,30 @@ export default function App() {
                 <span style={{ color: T.textDim }}>Sites</span>
                 <span style={{ color: T.textMid }}>{sites.filter(rowComplete).length}</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
-                <span style={{ color: T.textDim }}>Pattern</span>
-                <span style={{ color: T.textMid }}>{woConfig.numTechs} tech{Number(woConfig.numTechs) > 1 ? "s" : ""} × {woConfig.numDays} day{Number(woConfig.numDays) > 1 ? "s" : ""}</span>
+              <div style={{ fontSize: 12, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: T.textDim }}>Pattern</span>
+                  <span style={{ color: T.textMid }}>{woConfig.numTechs} tech{Number(woConfig.numTechs) > 1 ? "s" : ""} × {woConfig.numDays} day{Number(woConfig.numDays) > 1 ? "s" : ""} (default)</span>
+                </div>
+                {(() => {
+                  const overrides = sites.filter(rowComplete).filter(s =>
+                    (s.numTechs && s.numTechs !== woConfig.numTechs) ||
+                    (s.numDays  && s.numDays  !== woConfig.numDays)
+                  );
+                  if (!overrides.length) return null;
+                  return (
+                    <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
+                      {overrides.map((s, i) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                          <span style={{ color: T.accentHi }}>↳ {s.code || s.branchName || `Site ${i+1}`}</span>
+                          <span style={{ color: T.textMid }}>
+                            {s.numTechs || woConfig.numTechs} tech{Number(s.numTechs || woConfig.numTechs) > 1 ? "s" : ""} × {s.numDays || woConfig.numDays} day{Number(s.numDays || woConfig.numDays) > 1 ? "s" : ""}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
                 <span style={{ color: T.textDim }}>Template ID</span>
