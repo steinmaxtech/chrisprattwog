@@ -150,17 +150,41 @@ const JOKES = [
 
 const LOGO_IMG = "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";
 
+
+const SESSION_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+function loadSession() {
+  try {
+    const raw = sessionStorage.getItem("cpwog_session");
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (Date.now() - s.loginTime > SESSION_MS) {
+      sessionStorage.removeItem("cpwog_session");
+      return null;
+    }
+    return s;
+  } catch { return null; }
+}
+
+function saveSession(patch) {
+  try {
+    const existing = loadSession() || { loginTime: Date.now() };
+    sessionStorage.setItem("cpwog_session", JSON.stringify({ ...existing, ...patch }));
+  } catch {}
+}
+
 export default function App() {
-  const [authed, setAuthed] = useState(false);
+  const _s = loadSession();
+  const [authed, setAuthed] = useState(() => !!_s);
   const [pwInput, setPwInput] = useState("");
   const [pwError, setPwError] = useState(false);
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(() => _s?.step ?? 0);
   const [joke, setJoke] = useState(() => JOKES[Math.floor(Math.random() * JOKES.length)]);
-  const [projectId, setProjectId] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [woType, setWoType] = useState("LVL");
-  const [woConfig, setWoConfig] = useState({ ...WO_DEFAULTS["LVL"] });
-  const [sites, setSites] = useState([EMPTY_SITE()]);
+  const [projectId, setProjectId] = useState(() => _s?.projectId ?? "");
+  const [displayName, setDisplayName] = useState(() => _s?.displayName ?? "");
+  const [woType, setWoType] = useState(() => _s?.woType ?? "LVL");
+  const [woConfig, setWoConfig] = useState(() => _s?.woConfig ?? { ...WO_DEFAULTS["LVL"] });
+  const [sites, setSites] = useState(() => _s?.sites ?? [EMPTY_SITE()]);
   const [generating, setGenerating] = useState(false);
   const [activeCell, setActiveCell] = useState({ row: 0, col: 0 });
   const [pasteText, setPasteText] = useState("");
@@ -169,17 +193,17 @@ export default function App() {
   const inputRefs = useRef({});
   const [dark, setDark] = useState(() => { try { return sessionStorage.getItem("cpwog_dark") === "1"; } catch { return false; } });
 
-  // Persist work state to session on every change
+  // Persist work state to session on every relevant change
   useEffect(() => {
     if (authed) saveSession({ step, projectId, displayName, woType, woConfig, sites });
   }, [step, projectId, displayName, woType, woConfig, sites, authed]);
 
-  // Persist dark mode separately (survives logout)
+  // Persist dark mode preference
   useEffect(() => {
     try { sessionStorage.setItem("cpwog_dark", dark ? "1" : "0"); } catch {}
   }, [dark]);
 
-  // Auto-logout check on interval
+  // Auto-logout: check every minute if session has expired
   useEffect(() => {
     const interval = setInterval(() => {
       if (authed && !loadSession()) {
@@ -190,9 +214,8 @@ export default function App() {
         setWoType("LVL");
         setWoConfig({ ...WO_DEFAULTS["LVL"] });
         setSites([EMPTY_SITE()]);
-        sessionStorage.removeItem("cpwog_session");
       }
-    }, 60000); // check every minute
+    }, 60000);
     return () => clearInterval(interval);
   }, [authed]);
   const [templateIdHistory, setTemplateIdHistory] = useState({});   // { LVL: [{id, label}, ...], ... }
@@ -416,7 +439,7 @@ export default function App() {
     e.preventDefault();
     const correct = import.meta.env.VITE_APP_PASSWORD;
     if (!correct || pwInput === correct) {
-      try { sessionStorage.setItem("cpwog_session", JSON.stringify({ loginTime: Date.now() })); } catch {}
+      saveSession({ loginTime: Date.now() });
       setAuthed(true);
       setPwError(false);
     } else {
