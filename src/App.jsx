@@ -218,8 +218,8 @@ export default function App() {
       if (prev.numDays !== woConfig.numDays && site.numDays === prev.numDays) {
         updates.numDays = woConfig.numDays;
       }
-      // Sync date if site still matches old default date
-      if (prev.defaultDate !== woConfig.defaultDate && site.date === (prev.defaultDate || "")) {
+      // Sync date unless user manually overrode it for this site
+      if (prev.defaultDate !== woConfig.defaultDate && !site.dateOverridden) {
         updates.date = woConfig.defaultDate || "";
       }
       return Object.keys(updates).length ? { ...site, ...updates } : site;
@@ -375,7 +375,7 @@ export default function App() {
     setSites(prev => prev.map((s, idx) => {
       if (idx !== i) return s;
       const addrFields = ["address", "city", "state", "zip"];
-      return { ...s, [field]: val, verified: addrFields.includes(field) ? null : s.verified, verifyError: "" };
+      return { ...s, [field]: val, verified: addrFields.includes(field) ? null : s.verified, verifyError: "", ...(field === "date" ? { dateOverridden: true } : {}) };
     }));
 
   const addRows = (n) => setSites(prev => [...prev, ...Array(n).fill(null).map(() => ({ ...EMPTY_SITE(), date: woConfig.defaultDate || "", numTechs: woConfig.numTechs || "1", numDays: woConfig.numDays || "1" }))]);
