@@ -458,7 +458,10 @@ export default function App() {
 
     parsed = parsed.filter(s => s.code || s.address);
     if (parsed.length === 0) { setPasteError("Could not parse any rows. Make sure you copied headers too."); return; }
-    setSites(parsed);
+    setSites(prev => {
+      const existing = prev.filter(s => s.code || s.address || s.branchName);
+      return existing.length > 0 ? [...existing, ...parsed] : parsed;
+    });
     setPasteMode(false);
     setPasteText("");
   };
