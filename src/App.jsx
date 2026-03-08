@@ -195,6 +195,8 @@ export default function App() {
   const [pasteError, setPasteError] = useState("");
   const [clearConfirm, setClearConfirm] = useState(false);
   const [startOverConfirm, setStartOverConfirm] = useState(false);
+  const [importMode, setImportMode] = useState(false);
+  const fileInputRef = useRef(null);
   const inputRefs = useRef({});
   const [dark, setDark] = useState(() => { try { return sessionStorage.getItem("cpwog_dark") === "1"; } catch { return false; } });
 
@@ -373,6 +375,62 @@ export default function App() {
 
   const addRows = (n) => setSites(prev => [...prev, ...Array(n).fill(null).map(() => ({ ...EMPTY_SITE(), date: woConfig.defaultDate || "", numTechs: woConfig.numTechs || "1", numDays: woConfig.numDays || "1" }))]);
   const removeSite = (i) => setSites(prev => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev);
+
+  const importCSV = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target.result;
+        const lines = text.trim().split("\n").map(l => {
+          const cols = [];
+          let cur = "", inQ = false;
+          for (let i = 0; i < l.length; i++) {
+            const ch = l[i];
+            if (ch === '"' && !inQ) { inQ = true; }
+            else if (ch === '"' && inQ && l[i+1] === '"') { cur += '"'; i++; }
+            else if (ch === '"' && inQ) { inQ = false; }
+            else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ""; }
+            else { cur += ch; }
+          }
+          cols.push(cur.trim());
+          return cols;
+        });
+        const dataLines = lines.slice(1).filter(cols => cols.length > 10 && cols[2]);
+        const seen = new Set();
+        const unique = dataLines.filter(cols => {
+          const sid = cols[2];
+          if (seen.has(sid)) return false;
+          seen.add(sid);
+          return true;
+        });
+        if (unique.length === 0) { alert("No valid site rows found in this CSV."); return; }
+        const imported = unique.map(cols => ({
+          code:       (cols[2] || "").replace(/-[A-Z].*$/, ""),
+          branchName: "",
+          address:    cols[4]  || "",
+          address2:   cols[5]  || "",
+          city:       cols[6]  || "",
+          state:      cols[7]  || "",
+          zip:        cols[8]  || "",
+          date:       cols[11] || woConfig.defaultDate || "",
+          numTechs:   woConfig.numTechs || "1",
+          numDays:    woConfig.numDays  || "1",
+          verified: null, verifying: false, verifyError: ""
+        }));
+        setSites(prev => {
+          const existing = prev.filter(s => s.code || s.address || s.branchName);
+          return existing.length > 0 ? [...existing, ...imported] : imported;
+        });
+        setImportMode(false);
+        setPasteMode(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      } catch (err) {
+        alert("Failed to parse CSV: " + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const parsePaste = () => {
     setPasteError("");
@@ -850,16 +908,24 @@ export default function App() {
         {step === 1 && (
           <div>
             <div style={{ display: "flex", borderBottom: `1px solid ${T.border}`, marginBottom: 16 }}>
-              <button className={`tab-btn${pasteMode ? " active" : ""}`} onClick={() => setPasteMode(true)}>⌘ Paste from Spreadsheet</button>
-              <button className={`tab-btn${!pasteMode ? " active" : ""}`} onClick={() => setPasteMode(false)}>✎ Edit Table ({sites.length} rows)</button>
-              {!pasteMode && (
+              <button className={`tab-btn${pasteMode && !importMode ? " active" : ""}`} onClick={() => { setPasteMode(true); setImportMode(false); }}>⌘ Paste from Spreadsheet</button>
+              <button className={`tab-btn${!pasteMode && !importMode ? " active" : ""}`} onClick={() => { setPasteMode(false); setImportMode(false); }}>✎ Edit Table ({sites.length} rows)</button>
+              <button className={`tab-btn${importMode ? " active" : ""}`} onClick={() => { setImportMode(true); setPasteMode(false); }}>⬆ Import CSV</button>
+              {!pasteMode && !importMode && (
                 <button onClick={() => setClearConfirm(true)} style={{ marginLeft: "auto", background: "transparent", border: "1px solid #ef4444", borderRadius: 6, padding: "4px 12px", color: "#ef4444", cursor: "pointer", fontSize: 11, fontFamily: "inherit", alignSelf: "center" }}>
                   ✕ Clear All
                 </button>
               )}
             </div>
 
-            {pasteMode ? (
+            {importMode ? (
+              <div style={{ padding: "2rem", textAlign: "center" }}>
+                <input ref={fileInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => importCSV(e.target.files[0])} />
+                <div style={{ fontSize: 32, marginBottom: 12 }}>📂</div>
+                <div style={{ fontSize: 13, color: T.textDim, marginBottom: 20, lineHeight: 1.7 }}>Upload a previously exported FieldNation CSV to re-import its sites.<br/>Sites will be appended to the existing table. Branch names will be blank.</div>
+                <button onClick={() => fileInputRef.current?.click()} style={{ background: `linear-gradient(135deg,${T.accent},#dc6209)`, border: "none", borderRadius: 8, padding: "12px 36px", color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 18, letterSpacing: 2 }}>⬆ CHOOSE CSV FILE</button>
+              </div>
+            ) : pasteMode ? (
               <div>
                 <p style={{ color: T.textDim, fontSize: 12, marginBottom: 10, lineHeight: 1.6 }}>
                   Copy rows from your SiteList and paste below. Columns: <span style={{ color: T.textMid }}>Building Code · BranchName · TargetQuarter · TimeZone · Address · City · State · ZipCode · CompleteAddress · LVV · Status · PlannedDate</span>
