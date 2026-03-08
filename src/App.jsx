@@ -20,8 +20,8 @@ const WO_TYPES = {
   LVT:  { label: "LVT — Low Voltage Tech",           siteIdSuffix: "LVT",    numTechs: 3, numDays: 3, useBundle: true  },
   DEL:  { label: "DEL — Delivery/Install",           siteIdSuffix: "DEL",    numTechs: 1, numDays: 1, useBundle: false },
   BRK:  { label: "BRK — Backerboard Creation",          siteIdSuffix: "BRK",    numTechs: 1, numDays: 1, useBundle: false },
-  INT:  { label: "INT — Installation Technician",        siteIdSuffix: "INT",    numTechs: 1, numDays: 1, useBundle: false },
-  INL:  { label: "INL — Installation Lead",              siteIdSuffix: "INL",    numTechs: 1, numDays: 1, useBundle: false },
+  INT:  { label: "INT — Installation Technician",        siteIdSuffix: "INT",    numTechs: 1, numDays: 1, useBundle: true  },
+  INL:  { label: "INL — Installation Lead",              siteIdSuffix: "INL",    numTechs: 1, numDays: 1, useBundle: true  },
 };
 
 // Default configs per type — blank, user fills in each run
@@ -195,6 +195,8 @@ export default function App() {
   const [pasteError, setPasteError] = useState("");
   const [clearConfirm, setClearConfirm] = useState(false);
   const [startOverConfirm, setStartOverConfirm] = useState(false);
+  const [includeDEL, setIncludeDEL] = useState(false);
+  const [delConfig, setDelConfig] = useState({ ...WO_DEFAULTS["DEL"] });
   const [importMode, setImportMode] = useState(false);
   const fileInputRef = useRef(null);
   const inputRefs = useRef({});
@@ -634,36 +636,53 @@ export default function App() {
   const downloadCSV = useCallback(() => {
     setGenerating(true);
     try {
-      const rows = [];
-      for (const site of sites) {
-        const siteRows = buildRows(site, projectId, displayName, woType, woConfig);
-        // Remove trailing blank from last site
-        rows.push(...siteRows);
-      }
-      if (rows.length && rows[rows.length-1].length === 0) rows.pop();
-      const csv = toCSV(WO_HEADERS, rows);
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      const safeProject = projectId.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
       const now = new Date();
       const datePart = now.toISOString().split("T")[0];
       const timePart = now.toTimeString().slice(0, 8).replace(/:/g, "-");
-      a.href = url;
-      a.download = `FieldNation_${woType}_${safeProject}_${datePart}_${timePart}.csv`;
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const safeProject = projectId.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const triggerDownload = (csvContent, filename) => {
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = filename; a.style.display = "none";
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      };
+
+      // Main WO CSV
+      const rows = [];
+      for (const site of sites) {
+        rows.push(...buildRows(site, projectId, displayName, woType, woConfig));
+      }
+      if (rows.length && rows[rows.length-1].length === 0) rows.pop();
+      triggerDownload(toCSV(WO_HEADERS, rows), `FieldNation_${woType}_${safeProject}_${datePart}_${timePart}.csv`);
+
+      // DEL CSV (INT/INL only, when checkbox is checked)
+      if (includeDEL && (woType === "INT" || woType === "INL")) {
+        const delCfg = { ...delConfig };
+        const delRows = [];
+        for (const site of sites) {
+          if (!site.address && !site.code) continue;
+          // Only day 1 date, 1 tech, 1 day
+          const siteDay1 = { ...site, numTechs: "1", numDays: "1" };
+          delRows.push(...buildRows(siteDay1, projectId, displayName, "DEL", delCfg));
+        }
+        if (delRows.length && delRows[delRows.length-1].length === 0) delRows.pop();
+        if (delRows.length) {
+          setTimeout(() => {
+            triggerDownload(toCSV(WO_HEADERS, delRows), `FieldNation_DEL_${safeProject}_${datePart}_${timePart}.csv`);
+          }, 500);
+        }
+      }
     } catch (err) {
       alert("Error: " + err.message);
     }
     setGenerating(false);
-  }, [sites, projectId, displayName, woType, woConfig]);
+  }, [sites, projectId, displayName, woType, woConfig, includeDEL, delConfig]);
 
 
   const totalRows = sites.filter(rowComplete).reduce((sum, site) => sum + buildRows(site, projectId, displayName, woType, woConfig).filter(r => r.length > 0).length, 0);
+  const delRows = (includeDEL && (woType === "INT" || woType === "INL")) ? sites.filter(rowComplete).length : 0;
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -902,6 +921,47 @@ export default function App() {
                   &nbsp;·&nbsp; Site ID suffix: <span style={{ color: T.accentHi }}>{WO_TYPES[woType].siteIdSuffix}</span>
                   &nbsp;·&nbsp; Bundle: <span style={{ color: T.textMid }}>{WO_TYPES[woType].useBundle ? "yes" : "no"}</span>
                 </div>
+                {(woType === "INT" || woType === "INL") && (
+                  <>
+                    <div style={{ marginTop: 10, padding: "10px 14px", background: T.surface2, borderRadius: 7, border: `1px solid ${includeDEL ? T.accent : T.border}`, display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setIncludeDEL(d => !d)}>
+                      <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${includeDEL ? T.accent : T.border2}`, background: includeDEL ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {includeDEL && <span style={{ color: "#000", fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 12, color: includeDEL ? T.text : T.textMid, fontWeight: 600 }}>Also generate DEL work order on Day 1</div>
+                        <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>Creates 1 DEL WO per site · same start date as {woType} · configure below when enabled</div>
+                      </div>
+                    </div>
+                    {includeDEL && (
+                      <div style={{ marginTop: 10, background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1rem" }}>
+                        <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>DEL Work Order Config</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                          {[
+                            { key: "templateId",  label: "Template ID",          ph: "102221" },
+                            { key: "startTime",   label: "Scheduled Start Time", ph: "13:00:00" },
+                            { key: "techType",    label: "Tech Type",            ph: "Tech 1" },
+                            { key: "budgetTech",  label: "Budget (Tech) $",      ph: "200" },
+                            { key: "payRate",     label: "Pay Rate $",           ph: "150" },
+                            { key: "approxHours", label: "Est. Hours",           ph: "3" },
+                            { key: "country",     label: "Country",              ph: "" },
+                          ].map(({ key, label, ph }) => (
+                            <div key={key}>
+                              <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>{label}</label>
+                              <input
+                                style={T.inp}
+                                placeholder={ph}
+                                value={delConfig[key] || ""}
+                                onChange={e => setDelConfig(prev => ({ ...prev, [key]: e.target.value }))}
+                                onFocus={e => e.target.style.borderColor=T.accent}
+                                onBlur={e => e.target.style.borderColor=T.border2}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1095,7 +1155,7 @@ export default function App() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, paddingTop: 8 }}>
                 <span style={{ color: T.textDim }}>Total data rows</span>
-                <span style={{ color: T.text, fontWeight: 600 }}>{totalRows}</span>
+<span style={{ color: T.text, fontWeight: 600 }}>{totalRows}{delRows > 0 ? ` + ${delRows} DEL` : ""}</span>
               </div>
             </div>
 
@@ -1113,7 +1173,7 @@ export default function App() {
             </div>
 
             <button onClick={downloadCSV} disabled={generating} style={{ width: "100%", padding: "1rem", borderRadius: 10, border: "none", cursor: generating ? "not-allowed" : "pointer", background: generating ? T.disabledBg : `linear-gradient(135deg,${T.accent},#dc6209)`, color: generating ? T.disabledText : "#000", fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, transition: "all .2s", boxShadow: generating ? "none" : "0 4px 24px rgba(234,88,12,.35)" }}>
-              {generating ? "⏳  BUILDING CSV..." : `⬇  DOWNLOAD ${woType} CSV`}
+              {generating ? "⏳  BUILDING CSV..." : includeDEL && (woType === "INT" || woType === "INL") ? `⬇  DOWNLOAD ${woType} + DEL CSVs` : `⬇  DOWNLOAD ${woType} CSV`}
             </button>
             <div style={{ fontSize: 11, color: T.textFaint, textAlign: "center", marginTop: 8 }}>
               Single CSV file · Ready to upload directly to FieldNation
