@@ -197,6 +197,29 @@ export default function App() {
   const inputRefs = useRef({});
   const [dark, setDark] = useState(() => { try { return sessionStorage.getItem("cpwog_dark") === "1"; } catch { return false; } });
 
+  // Track previous woConfig to detect which fields changed
+  const prevConfigRef = useRef(woConfig);
+  useEffect(() => {
+    const prev = prevConfigRef.current;
+    setSites(s => s.map(site => {
+      const updates = {};
+      // Sync numTechs if site still matches old default (not manually overridden to something different)
+      if (prev.numTechs !== woConfig.numTechs && site.numTechs === prev.numTechs) {
+        updates.numTechs = woConfig.numTechs;
+      }
+      // Sync numDays if site still matches old default
+      if (prev.numDays !== woConfig.numDays && site.numDays === prev.numDays) {
+        updates.numDays = woConfig.numDays;
+      }
+      // Sync date if site still matches old default date
+      if (prev.defaultDate !== woConfig.defaultDate && site.date === (prev.defaultDate || "")) {
+        updates.date = woConfig.defaultDate || "";
+      }
+      return Object.keys(updates).length ? { ...site, ...updates } : site;
+    }));
+    prevConfigRef.current = woConfig;
+  }, [woConfig.numTechs, woConfig.numDays, woConfig.defaultDate]);
+
   // Persist work state to session on every relevant change
   useEffect(() => {
     if (authed) saveSession({ step, projectId, displayName, woType, woConfig, sites });
@@ -314,7 +337,7 @@ export default function App() {
       return { ...s, [field]: val, verified: addrFields.includes(field) ? null : s.verified, verifyError: "" };
     }));
 
-  const addRows = (n) => setSites(prev => [...prev, ...Array(n).fill(null).map(() => ({ ...EMPTY_SITE(), date: woConfig.defaultDate || "" }))]);
+  const addRows = (n) => setSites(prev => [...prev, ...Array(n).fill(null).map(() => ({ ...EMPTY_SITE(), date: woConfig.defaultDate || "", numTechs: woConfig.numTechs || "1", numDays: woConfig.numDays || "1" }))]);
   const removeSite = (i) => setSites(prev => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev);
 
   const parsePaste = () => {
@@ -339,7 +362,8 @@ export default function App() {
         if (!isNaN(d)) return d.toISOString().split("T")[0];
         return raw;
       })(),
-      numTechs: "", numDays: "",
+      numTechs: woConfig.numTechs || "1",
+      numDays: woConfig.numDays || "1",
       verified: null, verifying: false, verifyError: ""
     }))
     .map(s => ({ ...s, date: s.date || woConfig.defaultDate || "" }))
@@ -867,7 +891,7 @@ export default function App() {
                 This will delete all <strong style={{ color: T.text }}>{sites.length} row{sites.length !== 1 ? "s" : ""}</strong> from the table. This cannot be undone.
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => { setSites([EMPTY_SITE()]); setClearConfirm(false); }} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, cursor: "pointer" }}>
+                <button onClick={() => { setSites([{ ...EMPTY_SITE(), date: woConfig.defaultDate || "", numTechs: woConfig.numTechs || "1", numDays: woConfig.numDays || "1" }]); setClearConfirm(false); }} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, cursor: "pointer" }}>
                   YES, CLEAR ALL
                 </button>
                 <button onClick={() => setClearConfirm(false)} style={{ padding: "10px 18px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
