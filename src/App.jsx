@@ -397,16 +397,19 @@ export default function App() {
           return cols;
         });
         const dataLines = lines.slice(1).filter(cols => cols.length > 10 && cols[2]);
+        // Dedupe by base building code (strip WO type suffix AND tech number)
+        // e.g. FB01-LVL(1)(2) -> FB01, FB01-LVL(1) -> FB01, FB01-DEL -> FB01
+        const getBaseCode = (siteId) => siteId.replace(/-[A-Z]+.*$/, "").trim();
         const seen = new Set();
         const unique = dataLines.filter(cols => {
-          const sid = cols[2];
-          if (seen.has(sid)) return false;
-          seen.add(sid);
+          const base = getBaseCode(cols[2] || "");
+          if (!base || seen.has(base)) return false;
+          seen.add(base);
           return true;
         });
         if (unique.length === 0) { alert("No valid site rows found in this CSV."); return; }
         const imported = unique.map(cols => ({
-          code:       (cols[2] || "").replace(/-[A-Z].*$/, ""),
+          code:       getBaseCode(cols[2] || ""),
           branchName: "",
           address:    cols[4]  || "",
           address2:   cols[5]  || "",
