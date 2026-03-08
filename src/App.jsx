@@ -194,6 +194,7 @@ export default function App() {
   const [pasteMode, setPasteMode] = useState(true);
   const [pasteError, setPasteError] = useState("");
   const [clearConfirm, setClearConfirm] = useState(false);
+  const [startOverConfirm, setStartOverConfirm] = useState(false);
   const inputRefs = useRef({});
   const [dark, setDark] = useState(() => { try { return sessionStorage.getItem("cpwog_dark") === "1"; } catch { return false; } });
 
@@ -1048,6 +1049,11 @@ export default function App() {
             <div style={{ fontSize: 11, color: T.textFaint, textAlign: "center", marginTop: 8 }}>
               Single CSV file · Ready to upload directly to FieldNation
             </div>
+            <div style={{ textAlign: "center", marginTop: 16 }}>
+              <button onClick={() => setStartOverConfirm(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 8, padding: "8px 24px", color: T.textDim, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
+                ↩ Start Over
+              </button>
+            </div>
           </div>
         )}
 
@@ -1063,6 +1069,40 @@ export default function App() {
             </button>
           )}
         </div>
+
+        {/* Start Over modal */}
+        {startOverConfirm && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+            <div style={{ background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 14, padding: "1.75rem", width: "100%", maxWidth: 380, margin: "0 1rem" }}>
+              <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 2, color: T.accent, marginBottom: 8 }}>START OVER?</div>
+              <div style={{ fontSize: 13, color: T.textMid, marginBottom: 20, lineHeight: 1.6 }}>
+                Go back to Step 1 and run another batch. Keep your sites or clear everything?
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <button onClick={() => {
+                  setStep(0);
+                  setStartOverConfirm(false);
+                }} style={{ padding: "10px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, cursor: "pointer" }}>
+                  KEEP DATA &amp; START OVER
+                </button>
+                <button onClick={() => {
+                  setStep(0);
+                  setProjectId("");
+                  setDisplayName("");
+                  setWoType("LVL");
+                  setWoConfig({ ...WO_DEFAULTS["LVL"] });
+                  setSites([{ ...EMPTY_SITE(), date: "", numTechs: "1", numDays: "1" }]);
+                  setStartOverConfirm(false);
+                }} style={{ padding: "10px", borderRadius: 8, border: "1px solid #ef4444", background: "transparent", color: "#ef4444", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, cursor: "pointer" }}>
+                  CLEAR ALL &amp; START OVER
+                </button>
+                <button onClick={() => setStartOverConfirm(false)} style={{ padding: "8px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Clear All confirmation modal */}
         {clearConfirm && (
