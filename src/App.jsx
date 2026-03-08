@@ -25,7 +25,7 @@ const WO_TYPES = {
 };
 
 // Default configs per type — blank, user fills in each run
-const BLANK_CFG = { templateId: "", startTime: "", techType: "", numTechs: "1", numDays: "1", budgetTech: "", payRate: "", approxHours: "", country: "" };
+const BLANK_CFG = { templateId: "", startTime: "", defaultDate: "", techType: "", numTechs: "1", numDays: "1", budgetTech: "", payRate: "", approxHours: "", country: "" };
 const WO_DEFAULTS = {
   LVL:  { ...BLANK_CFG, templateId: "103095" },
   LVT:  { ...BLANK_CFG, templateId: "103094" },
@@ -45,8 +45,8 @@ function buildRows(site, projectId, displayName, woType, cfg) {
   const pay = Number(cfg.payRate);
   const hours = Number(cfg.approxHours);
 
-  const numTechs = Number(cfg.numTechs) || 1;
-  const numDays = Number(cfg.numDays) || 1;
+  const numTechs = Number(site.numTechs || cfg.numTechs) || 1;
+  const numDays = Number(site.numDays || cfg.numDays) || 1;
   if (numTechs > 1) {
     for (let t = 1; t <= numTechs; t++) {
       for (let d = 0; d < numDays; d++) {
@@ -111,6 +111,7 @@ function toCSV(headers, rows) {
 const EMPTY_SITE = () => ({
   code: "", branchName: "", address: "", address2: "",
   city: "", state: "", zip: "", date: "",
+  numTechs: "", numDays: "",
   verified: null, verifying: false, verifyError: ""
 });
 
@@ -123,6 +124,8 @@ const COLS = [
   { key: "state",      label: "ST *",        width: 50,  ph: "CO" },
   { key: "zip",        label: "ZIP *",       width: 72,  ph: "80903" },
   { key: "date",       label: "Start Date *",width: 128, ph: "", type: "date" },
+  { key: "numTechs",   label: "Techs",       width: 54,  ph: "↓" },
+  { key: "numDays",    label: "Days",        width: 54,  ph: "↓" },
 ];
 
 const STEP_LABELS = ["Project Info", "Add Sites", "Review & Export"];
@@ -190,6 +193,7 @@ export default function App() {
   const [pasteText, setPasteText] = useState("");
   const [pasteMode, setPasteMode] = useState(true);
   const [pasteError, setPasteError] = useState("");
+  const [clearConfirm, setClearConfirm] = useState(false);
   const inputRefs = useRef({});
   const [dark, setDark] = useState(() => { try { return sessionStorage.getItem("cpwog_dark") === "1"; } catch { return false; } });
 
@@ -310,7 +314,7 @@ export default function App() {
       return { ...s, [field]: val, verified: addrFields.includes(field) ? null : s.verified, verifyError: "" };
     }));
 
-  const addRows = (n) => setSites(prev => [...prev, ...Array(n).fill(null).map(EMPTY_SITE)]);
+  const addRows = (n) => setSites(prev => [...prev, ...Array(n).fill(null).map(() => ({ ...EMPTY_SITE(), date: woConfig.defaultDate || "" }))]);
   const removeSite = (i) => setSites(prev => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev);
 
   const parsePaste = () => {
@@ -335,8 +339,11 @@ export default function App() {
         if (!isNaN(d)) return d.toISOString().split("T")[0];
         return raw;
       })(),
+      numTechs: "", numDays: "",
       verified: null, verifying: false, verifyError: ""
-    })).filter(s => s.code || s.address);
+    }))
+    .map(s => ({ ...s, date: s.date || woConfig.defaultDate || "" }))
+    .filter(s => s.code || s.address);
     if (parsed.length === 0) { setPasteError("Could not parse any rows."); return; }
     setSites(parsed);
     setPasteMode(false);
@@ -619,6 +626,7 @@ export default function App() {
                   {/* Remaining config fields */}
                   {[
                     { key: "startTime",   label: "Scheduled Start Time", ph: "4:30pm", hint: "e.g. 4:30pm or 13:00:00" },
+                    { key: "defaultDate",  label: "Default Start Date",   ph: "", hint: "Pre-fills date column for all sites", type: "date" },
                     { key: "techType",    label: "Tech Type",          ph: "Tech 1", hint: Number(woConfig.numTechs) > 1 ? `Base label — auto-numbered 1–${woConfig.numTechs}` : "Exact value in CSV" },
                     { key: "numTechs",    label: "Tech Count",         ph: "1",      hint: "Number of techs per site" },
                     { key: "numDays",     label: "Days Needed",        ph: "3",      hint: "Days per site per tech" },
@@ -626,13 +634,14 @@ export default function App() {
                     { key: "payRate",     label: "Pay Rate $",         ph: "700",    hint: "Tech pay rate" },
                     { key: "approxHours",label: "Est. Hours",          ph: "10",     hint: "Approx hours to complete" },
                     { key: "country",     label: "Country",            ph: "US",     hint: "Leave blank if not required" },
-                  ].map(({ key, label, ph, hint }) => (
+                  ].map(({ key, label, ph, hint, type }) => (
                     <div key={key}>
                       <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 5 }}>{label}</label>
                       <input
                         style={T.inp}
+                        type={type || "text"}
                         placeholder={ph}
-                        value={woConfig[key]}
+                        value={woConfig[key] || ""}
                         onChange={e => setWoConfig(prev => ({ ...prev, [key]: e.target.value }))}
                         onFocus={e => e.target.style.borderColor=T.accent}
                         onBlur={e => e.target.style.borderColor=T.border2}
@@ -657,6 +666,11 @@ export default function App() {
             <div style={{ display: "flex", borderBottom: `1px solid ${T.border}`, marginBottom: 16 }}>
               <button className={`tab-btn${pasteMode ? " active" : ""}`} onClick={() => setPasteMode(true)}>⌘ Paste from Spreadsheet</button>
               <button className={`tab-btn${!pasteMode ? " active" : ""}`} onClick={() => setPasteMode(false)}>✎ Edit Table ({sites.length} rows)</button>
+              {!pasteMode && (
+                <button onClick={() => setClearConfirm(true)} style={{ marginLeft: "auto", background: "transparent", border: "1px solid #ef4444", borderRadius: 6, padding: "4px 12px", color: "#ef4444", cursor: "pointer", fontSize: 11, fontFamily: "inherit", alignSelf: "center" }}>
+                  ✕ Clear All
+                </button>
+              )}
             </div>
 
             {pasteMode ? (
@@ -721,7 +735,7 @@ export default function App() {
                                     ref={el => inputRefs.current[`${rowIdx}-${colIdx}`] = el}
                                     type={col.type || "text"}
                                     value={site[col.key]}
-                                    placeholder={col.ph}
+                                    placeholder={col.key === 'numTechs' ? (woConfig.numTechs || col.ph) : col.key === 'numDays' ? (woConfig.numDays || col.ph) : col.key === 'date' ? (woConfig.defaultDate || col.ph) : col.ph}
                                     onChange={e => updateSite(rowIdx, col.key, e.target.value)}
                                     onKeyDown={e => handleKeyDown(e, rowIdx, colIdx)}
                                     onFocus={() => setActiveCell({ row: rowIdx, col: colIdx })}
@@ -843,6 +857,26 @@ export default function App() {
             </button>
           )}
         </div>
+
+        {/* Clear All confirmation modal */}
+        {clearConfirm && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+            <div style={{ background: T.surface, border: "1px solid #ef4444", borderRadius: 14, padding: "1.75rem", width: "100%", maxWidth: 360, margin: "0 1rem" }}>
+              <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 2, color: "#ef4444", marginBottom: 8 }}>CLEAR ALL SITES?</div>
+              <div style={{ fontSize: 13, color: T.textMid, marginBottom: 20, lineHeight: 1.6 }}>
+                This will delete all <strong style={{ color: T.text }}>{sites.length} row{sites.length !== 1 ? "s" : ""}</strong> from the table. This cannot be undone.
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { setSites([EMPTY_SITE()]); setClearConfirm(false); }} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, cursor: "pointer" }}>
+                  YES, CLEAR ALL
+                </button>
+                <button onClick={() => setClearConfirm(false)} style={{ padding: "10px 18px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Template ID label prompt modal */}
         {pendingTidLabel && (
