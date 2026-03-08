@@ -167,7 +167,34 @@ export default function App() {
   const [pasteMode, setPasteMode] = useState(true);
   const [pasteError, setPasteError] = useState("");
   const inputRefs = useRef({});
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(() => { try { return sessionStorage.getItem("cpwog_dark") === "1"; } catch { return false; } });
+
+  // Persist work state to session on every change
+  useEffect(() => {
+    if (authed) saveSession({ step, projectId, displayName, woType, woConfig, sites });
+  }, [step, projectId, displayName, woType, woConfig, sites, authed]);
+
+  // Persist dark mode separately (survives logout)
+  useEffect(() => {
+    try { sessionStorage.setItem("cpwog_dark", dark ? "1" : "0"); } catch {}
+  }, [dark]);
+
+  // Auto-logout check on interval
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (authed && !loadSession()) {
+        setAuthed(false);
+        setStep(0);
+        setProjectId("");
+        setDisplayName("");
+        setWoType("LVL");
+        setWoConfig({ ...WO_DEFAULTS["LVL"] });
+        setSites([EMPTY_SITE()]);
+        sessionStorage.removeItem("cpwog_session");
+      }
+    }, 60000); // check every minute
+    return () => clearInterval(interval);
+  }, [authed]);
   const [templateIdHistory, setTemplateIdHistory] = useState({});   // { LVL: [{id, label}, ...], ... }
   const [showTidDropdown, setShowTidDropdown] = useState(false);
   const [pendingTidLabel, setPendingTidLabel] = useState(null); // {type, id} waiting for label
@@ -389,6 +416,7 @@ export default function App() {
     e.preventDefault();
     const correct = import.meta.env.VITE_APP_PASSWORD;
     if (!correct || pwInput === correct) {
+      try { sessionStorage.setItem("cpwog_session", JSON.stringify({ loginTime: Date.now() })); } catch {}
       setAuthed(true);
       setPwError(false);
     } else {
@@ -833,7 +861,7 @@ export default function App() {
 
         {/* Logout */}
         <div style={{ textAlign: "center", marginTop: 16 }}>
-          <button onClick={() => { setAuthed(false); setPwInput(""); setStep(0); }} style={{ background: "transparent", border: "none", color: T.textFaint, cursor: "pointer", fontSize: 11, fontFamily: "inherit", textDecoration: "underline" }}>
+          <button onClick={() => { sessionStorage.removeItem("cpwog_session"); setAuthed(false); setPwInput(""); setStep(0); setProjectId(""); setDisplayName(""); setWoType("LVL"); setWoConfig({ ...WO_DEFAULTS["LVL"] }); setSites([EMPTY_SITE()]); }} style={{ background: "transparent", border: "none", color: T.textFaint, cursor: "pointer", fontSize: 11, fontFamily: "inherit", textDecoration: "underline" }}>
             Log out
           </button>
         </div>
