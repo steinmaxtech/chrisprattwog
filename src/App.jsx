@@ -254,6 +254,7 @@ export default function App() {
   }, [authed]);
   const [templateIdHistory, setTemplateIdHistory] = useState({});   // { LVL: [{id, label}, ...], ... }
   const [showTidDropdown, setShowTidDropdown] = useState(false);
+  const [showDelTidDropdown, setShowDelTidDropdown] = useState(false);
   const [projectIdHistory, setProjectIdHistory] = useState([]);
   const [displayNameHistory, setDisplayNameHistory] = useState([]);
   const [showPidDropdown, setShowPidDropdown] = useState(false);
@@ -662,6 +663,7 @@ export default function App() {
       // DEL CSV (INT/INL only, when checkbox is checked)
       if (includeDEL && (woType === "INT" || woType === "INL")) {
         const delCfg = { ...delConfig };
+        if (delCfg.templateId) saveTemplateId("DEL", delCfg.templateId, "");
         const delRows = [];
         for (const site of sites) {
           if (!site.address && !site.code) continue;
@@ -938,8 +940,43 @@ export default function App() {
                       <div style={{ marginTop: 10, background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1rem" }}>
                         <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>DEL Work Order Config</div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                          {/* Template ID with history dropdown */}
+                          <div style={{ position: "relative" }}>
+                            <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Template ID</label>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <input
+                                style={{ ...T.inp, flex: 1 }}
+                                placeholder="102221"
+                                value={delConfig.templateId || ""}
+                                onChange={e => setDelConfig(prev => ({ ...prev, templateId: e.target.value }))}
+                                onFocus={e => { e.target.style.borderColor=T.accent; }}
+                                onBlur={e => { e.target.style.borderColor=T.border2; setTimeout(() => setShowDelTidDropdown(false), 150); }}
+                              />
+                              {(templateIdHistory["DEL"]?.length > 0) && (
+                                <button onClick={() => setShowDelTidDropdown(d => !d)} style={{ background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "0 10px", color: T.textMid, cursor: "pointer", fontSize: 13, flexShrink: 0 }} title="Recent DEL template IDs">▾</button>
+                              )}
+                            </div>
+                            {showDelTidDropdown && templateIdHistory["DEL"]?.length > 0 && (
+                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 7, zIndex: 100, marginTop: 3, overflow: "hidden" }}>
+                                {templateIdHistory["DEL"].map((entry) => {
+                                  const tid = typeof entry === "string" ? entry : entry.id;
+                                  const lbl = typeof entry === "string" ? "" : entry.label;
+                                  return (
+                                    <div key={tid} onClick={() => { setDelConfig(prev => ({ ...prev, templateId: tid })); setShowDelTidDropdown(false); }}
+                                      style={{ padding: "8px 12px", cursor: "pointer", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                                      onMouseEnter={e => e.currentTarget.style.background=T.rowHover}
+                                      onMouseLeave={e => e.currentTarget.style.background="transparent"}
+                                    >
+                                      <span style={{ fontSize: 12, color: T.text, fontWeight: 600 }}>{tid}</span>
+                                      {lbl && <span style={{ fontSize: 11, color: T.textDim, marginLeft: 8 }}>{lbl}</span>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                          {/* Remaining DEL config fields */}
                           {[
-                            { key: "templateId",  label: "Template ID",          ph: "102221" },
                             { key: "startTime",   label: "Scheduled Start Time", ph: "13:00:00" },
                             { key: "techType",    label: "Tech Type",            ph: "Tech 1" },
                             { key: "budgetTech",  label: "Budget (Tech) $",      ph: "200" },
