@@ -343,32 +343,121 @@ export default function App() {
   const parsePaste = () => {
     setPasteError("");
     if (!pasteText.trim()) { setPasteError("Nothing pasted yet."); return; }
-    const lines = pasteText.trim().split("\n").map(l => l.split("\t"));
-    const dataLines = lines[0][0]?.match(/^[A-Z]{2,}/i) && isNaN(lines[0][0]) && !lines[0][0].match(/^[A-Z]{1,4}\d/)
-      ? lines.slice(1) : lines;
-    if (dataLines.length === 0) { setPasteError("No data rows found."); return; }
-    const parsed = dataLines.map(cols => ({
-      code:       (cols[0] || "").trim(),
-      branchName: (cols[1] || "").trim(),
-      address:    (cols[4] || "").trim(),
-      address2:   "",
-      city:       (cols[5] || "").trim(),
-      state:      (cols[6] || "").trim(),
-      zip:        String(cols[7] || "").trim(),
-      date: (() => {
-        const raw = (cols[11] || "").trim();
-        if (!raw) return "";
-        const d = new Date(raw);
-        if (!isNaN(d)) return d.toISOString().split("T")[0];
-        return raw;
-      })(),
+    const rawLines = pasteText.trim().split("\n").filter(l => l.trim());
+    if (rawLines.length === 0) { setPasteError("No data rows found."); return; }
+
+    const siteDefaults = {
       numTechs: woConfig.numTechs || "1",
       numDays: woConfig.numDays || "1",
       verified: null, verifying: false, verifyError: ""
-    }))
-    .map(s => ({ ...s, date: s.date || woConfig.defaultDate || "" }))
-    .filter(s => s.code || s.address);
-    if (parsed.length === 0) { setPasteError("Could not parse any rows."); return; }
+    };
+    const parseDate = (raw) => {
+      if (!raw) return woConfig.defaultDate || "";
+      const d = new Date(raw);
+      return !isNaN(d) ? d.toISOString().split("T")[0] : raw;
+    };
+
+    // Detect delimiter: if first line has tabs use tab, else comma
+    const delim = rawLines[0].includes("\t") ? "\t" : ",";
+    const lines = rawLines.map(l => l.split(delim).map(c => c.trim()));
+
+    const firstRow = lines[0].map(h => h.toLowerCase().replace(/[^a-z]/g, ""));
+    const isBuildingFormat = firstRow.some(h => h === "buildingcode" || h === "buildingname");
+    const isHeaderRow = (row) => row.some(h => /^[a-zA-Z]{4,}/.test(h) && isNaN(h));
+
+    let parsed;
+
+    if (isBuildingFormat) {
+      // Format 2 (tab, with headers): buildingcode, buildingname, address, city, state, zip
+      const headers = firstRow;
+      const idx = (name) => headers.findIndex(h => h === name || h.includes(name));
+      const iCode = idx("buildingcode"), iName = idx("buildingname");
+      const iAddr = idx("address"), iCity = idx("city");
+      const iState = idx("state"), iZip = idx("zip"), iDate = idx("date");
+      parsed = lines.slice(1).map(cols => ({
+        code:       iCode  >= 0 ? cols[iCode]  : "",
+        branchName: iName  >= 0 ? cols[iName]  : "",
+        address:    iAddr  >= 0 ? cols[iAddr]  : "",
+        address2:   "",
+        city:       iCity  >= 0 ? cols[iCity]  : "",
+        state:      iState >= 0 ? cols[iState] : "",
+        zip:        iZip   >= 0 ? cols[iZip]   : "",
+        date:       parseDate(iDate >= 0 ? cols[iDate] : ""),
+        ...siteDefaults
+      }));
+    } else if (delim === ",") {
+      // Format 3 (comma, no headers): code, name, address, city, state zip  OR  code, name, address, city, state, zip
+      parsed = lines.map(cols => {
+        // last field might be "CO 80260" (state+zip together) or separate
+        let state = "", zip = "";
+        const last = cols[cols.length - 1] || "";
+        const secondLast = cols[cols.length - 2] || "";
+        const stateZipMatch = last.match(/^([A-Z]{2})\s+(\d{5}(-\d{4})?)$/);
+        if (stateZipMatch) {
+          // "CO 80260" in last field
+          state = stateZipMatch[1];
+          zip   = stateZipMatch[2];
+          return {
+            code:       cols[0] || "",
+            branchName: cols[1] || "",
+            address:    cols[2] || "",
+            address2:   "",
+            city:       cols[3] || "",
+            state, zip,
+            date:       parseDate(""),
+            ...siteDefaults
+          };
+        } else {
+          // separate: code, name, address, city, state, zip
+          return {
+            code:       cols[0] || "",
+            branchName: cols[1] || "",
+            address:    cols[2] || "",
+            address2:   "",
+            city:       cols[3] || "",
+            state:      cols[4] || "",
+            zip:        cols[5] || "",
+            date:       parseDate(""),
+            ...siteDefaults
+          };
+        }
+      });
+    } else {
+      const dataLines = isHeaderRow(lines[0]) ? lines.slice(1) : lines;
+      // Detect compact 6-col tab format (code, name, address, city, state, zip)
+      // vs original SiteList (12+ cols with address at col 4)
+      const isCompact = dataLines.length > 0 && dataLines[0].length <= 7;
+      if (isCompact) {
+        // Format 3b (tab, no headers, 6 cols): code, name, address, city, state, zip
+        parsed = dataLines.map(cols => ({
+          code:       cols[0] || "",
+          branchName: cols[1] || "",
+          address:    cols[2] || "",
+          address2:   "",
+          city:       cols[3] || "",
+          state:      cols[4] || "",
+          zip:        cols[5] || "",
+          date:       parseDate(""),
+          ...siteDefaults
+        }));
+      } else {
+        // Format 1 (tab, original SiteList): col indices 0,1,4,5,6,7,11
+        parsed = dataLines.map(cols => ({
+          code:       cols[0]  || "",
+          branchName: cols[1]  || "",
+          address:    cols[4]  || "",
+          address2:   "",
+          city:       cols[5]  || "",
+          state:      cols[6]  || "",
+          zip:        cols[7]  || "",
+          date:       parseDate(cols[11] || ""),
+          ...siteDefaults
+        }));
+      }
+    }
+
+    parsed = parsed.filter(s => s.code || s.address);
+    if (parsed.length === 0) { setPasteError("Could not parse any rows. Make sure you copied headers too."); return; }
     setSites(parsed);
     setPasteMode(false);
     setPasteText("");
