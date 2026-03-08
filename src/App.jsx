@@ -584,9 +584,11 @@ export default function App() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       const safeProject = projectId.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
-      const date = new Date().toISOString().split("T")[0];
+      const now = new Date();
+      const datePart = now.toISOString().split("T")[0];
+      const timePart = now.toTimeString().slice(0, 8).replace(/:/g, "-");
       a.href = url;
-      a.download = `FieldNation_${woType}_${safeProject}_${date}.csv`;
+      a.download = `FieldNation_${woType}_${safeProject}_${datePart}_${timePart}.csv`;
       a.style.display = "none";
       document.body.appendChild(a);
       a.click();
