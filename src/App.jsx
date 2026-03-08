@@ -90,7 +90,9 @@ function makeRow({ templateId, projectId, siteId, bundle, site, date, startTime,
 }
 
 function addDays(dateStr, n) {
+  if (!dateStr || !dateStr.trim()) return "";
   const d = new Date(dateStr + "T12:00:00");
+  if (isNaN(d.getTime())) return dateStr;
   d.setDate(d.getDate() + n);
   return d.toISOString().split("T")[0];
 }
