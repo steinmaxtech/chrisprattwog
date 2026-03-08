@@ -122,6 +122,9 @@ const AvatarIcon = () => (
 );
 
 export default function App() {
+  const [authed, setAuthed] = useState(false);
+  const [pwInput, setPwInput] = useState("");
+  const [pwError, setPwError] = useState(false);
   const [step, setStep] = useState(0);
   const [projectId, setProjectId] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -140,21 +143,19 @@ export default function App() {
 
   // Load saved template ID history from storage on mount
   useEffect(() => {
-    (async () => {
-      try {
-        const result = await window.storage.get("templateIdHistory");
-        if (result?.value) setTemplateIdHistory(JSON.parse(result.value));
-      } catch {}
-    })();
+    try {
+      const saved = localStorage.getItem("templateIdHistory");
+      if (saved) setTemplateIdHistory(JSON.parse(saved));
+    } catch {}
   }, []);
 
-  const saveTemplateId = async (type, id) => {
+  const saveTemplateId = (type, id) => {
     if (!id.trim()) return;
     setTemplateIdHistory(prev => {
       const existing = prev[type] || [];
       const updated = [id, ...existing.filter(x => x !== id)].slice(0, 5);
       const next = { ...prev, [type]: updated };
-      window.storage.set("templateIdHistory", JSON.stringify(next)).catch(() => {});
+      try { localStorage.setItem("templateIdHistory", JSON.stringify(next)); } catch {}
       return next;
     });
   };
@@ -316,6 +317,55 @@ export default function App() {
 
 
   const totalRows = sites.filter(rowComplete).reduce((sum, site) => sum + buildRows(site, projectId, displayName, woType, woConfig).filter(r => r.length > 0).length, 0);
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    const correct = import.meta.env.VITE_APP_PASSWORD;
+    if (!correct || pwInput === correct) {
+      setAuthed(true);
+      setPwError(false);
+    } else {
+      setPwError(true);
+      setPwInput("");
+    }
+  };
+
+  if (!authed) return (
+    <div style={{ fontFamily: "'DM Mono','Courier New',monospace", background: dark ? "#0f0f10" : "#f4f4f5", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: dark ? "#e4e4e7" : "#18181b" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap'); * { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
+      <div style={{ width: "100%", maxWidth: 380, padding: "2rem" }}>
+        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+          <div style={{ width: 56, height: 56, borderRadius: "50%", background: dark ? "#1c1009" : "#fff7ed", border: "2px solid #e97316", margin: "0 auto 1rem", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="28" height="28" viewBox="0 0 44 44" fill="none"><circle cx="22" cy="17" r="7" fill="#e97316"/><ellipse cx="22" cy="35" rx="12" ry="8" fill="#e97316"/></svg>
+          </div>
+          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 22, letterSpacing: 3, color: "#e97316" }}>CHRIS PRATT</div>
+          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 3, color: dark ? "#52525b" : "#71717a", marginTop: 2 }}>WORK ORDER GENERATOR</div>
+        </div>
+        <div style={{ background: dark ? "#18181b" : "#ffffff", border: `1px solid ${dark ? "#27272a" : "#e4e4e7"}`, borderRadius: 12, padding: "1.5rem" }}>
+          <form onSubmit={handleLogin}>
+            <label style={{ display: "block", fontSize: 10, color: dark ? "#71717a" : "#52525b", textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Password</label>
+            <input
+              type="password"
+              value={pwInput}
+              onChange={e => { setPwInput(e.target.value); setPwError(false); }}
+              placeholder="Enter password"
+              autoFocus
+              style={{ width: "100%", background: dark ? "#111" : "#fff", border: `1px solid ${pwError ? "#ef4444" : dark ? "#3f3f46" : "#d4d4d8"}`, borderRadius: 7, padding: "10px 13px", color: dark ? "#e4e4e7" : "#18181b", fontSize: 13, fontFamily: "inherit", marginBottom: 8, outline: "none" }}
+            />
+            {pwError && <div style={{ color: "#ef4444", fontSize: 11, marginBottom: 8 }}>Incorrect password</div>}
+            <button type="submit" style={{ width: "100%", padding: "10px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#e97316,#dc6209)", color: "#000", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2, cursor: "pointer" }}>
+              ENTER
+            </button>
+          </form>
+        </div>
+        <div style={{ textAlign: "right", marginTop: 12 }}>
+          <button onClick={() => setDark(d => !d)} style={{ background: "transparent", border: "none", color: dark ? "#52525b" : "#71717a", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>
+            {dark ? "☀ Light" : "🌙 Dark"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ fontFamily: "'DM Mono','Courier New',monospace", background: T.bg, minHeight: "100vh", color: T.text }}>
