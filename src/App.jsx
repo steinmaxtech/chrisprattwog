@@ -53,7 +53,7 @@ function buildRows(site, projectId, displayName, woType, cfg) {
         const date = addDays(site.date, d);
         const siteId = `${site.code}-${meta.siteIdSuffix}(${t})`;
         const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-        rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: `${cfg.techType} ${t}`, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName }));
+        rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: `${cfg.techType} ${t}`, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName }));
       }
     }
   } else {
@@ -61,7 +61,7 @@ function buildRows(site, projectId, displayName, woType, cfg) {
       const date = addDays(site.date, d);
       const siteId = `${site.code}-${meta.siteIdSuffix}`;
       const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-      rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName }));
+      rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName }));
     }
     if (numDays > 1) rows.push([]);
   }
@@ -204,6 +204,8 @@ export default function App() {
   const inputRefs = useRef({});
   const [dark, setDark] = useState(() => { try { return sessionStorage.getItem("cpwog_dark") === "1"; } catch { return false; } });
 
+  const ALL_WO_TYPES = { ...WO_TYPES, ...customWoTypes };
+
   // Track previous woConfig to detect which fields changed
   const prevConfigRef = useRef(woConfig);
   useEffect(() => {
@@ -255,6 +257,10 @@ export default function App() {
   const [templateIdHistory, setTemplateIdHistory] = useState({});   // { LVL: [{id, label}, ...], ... }
   const [showTidDropdown, setShowTidDropdown] = useState(false);
   const [showDelTidDropdown, setShowDelTidDropdown] = useState(false);
+  const [customWoTypes, setCustomWoTypes] = useState({});
+  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [editingCustomKey, setEditingCustomKey] = useState(null);
+  const [customForm, setCustomForm] = useState({ key: "", label: "", siteIdSuffix: "", numTechs: "1", numDays: "1", useBundle: false });
   const [projectIdHistory, setProjectIdHistory] = useState([]);
   const [displayNameHistory, setDisplayNameHistory] = useState([]);
   const [showPidDropdown, setShowPidDropdown] = useState(false);
@@ -267,6 +273,10 @@ export default function App() {
     sbFetch("/template_id_history?id=eq.1&select=data")
       .then(r => r.ok ? r.json() : null)
       .then(rows => { if (rows?.[0]?.data) setTemplateIdHistory(rows[0].data); })
+      .catch(() => {});
+    sbFetch("/custom_wo_types?id=eq.1&select=data")
+      .then(r => r.ok ? r.json() : null)
+      .then(rows => { if (rows?.[0]?.data) setCustomWoTypes(rows[0].data); })
       .catch(() => {});
     sbFetch("/project_history?id=eq.1&select=project_ids,display_names")
       .then(r => r.ok ? r.json() : null)
@@ -311,6 +321,14 @@ export default function App() {
       sbFetch("/project_history?id=eq.1", { method: "PATCH", prefer: "return=minimal", body: JSON.stringify({ display_names: updated, updated_at: new Date().toISOString() }) }).catch(() => {});
       return updated;
     });
+  };
+
+  const saveCustomWoTypes = (next) => {
+    setCustomWoTypes(next);
+    sbFetch("/custom_wo_types?id=eq.1", {
+      method: "PATCH", prefer: "return=minimal",
+      body: JSON.stringify({ data: next, updated_at: new Date().toISOString() })
+    }).catch(() => {});
   };
 
   const getEntryLabel = (type, id) => {
@@ -655,13 +673,13 @@ export default function App() {
       // Main WO CSV
       const rows = [];
       for (const site of sites) {
-        rows.push(...buildRows(site, projectId, displayName, woType, woConfig));
+        rows.push(...buildRows(site, projectId, displayName, woType, woConfig, ALL_WO_TYPES));
       }
       if (rows.length && rows[rows.length-1].length === 0) rows.pop();
       triggerDownload(toCSV(WO_HEADERS, rows), `FieldNation_${woType}_${safeProject}_${datePart}_${timePart}.csv`);
 
       // DEL CSV (INT/INL only, when checkbox is checked)
-      if (includeDEL && (woType === "INT" || woType === "INL")) {
+      if (includeDEL) {
         const delCfg = { ...delConfig };
         if (delCfg.templateId) saveTemplateId("DEL", delCfg.templateId, "");
         const delRows = [];
@@ -669,7 +687,7 @@ export default function App() {
           if (!site.address && !site.code) continue;
           // Only day 1 date, 1 tech, 1 day
           const siteDay1 = { ...site, numTechs: "1", numDays: "1" };
-          delRows.push(...buildRows(siteDay1, projectId, displayName, "DEL", delCfg));
+          delRows.push(...buildRows(siteDay1, projectId, displayName, "DEL", delCfg, ALL_WO_TYPES));
         }
         if (delRows.length && delRows[delRows.length-1].length === 0) delRows.pop();
         if (delRows.length) {
@@ -685,8 +703,8 @@ export default function App() {
   }, [sites, projectId, displayName, woType, woConfig, includeDEL, delConfig]);
 
 
-  const totalRows = sites.filter(rowComplete).reduce((sum, site) => sum + buildRows(site, projectId, displayName, woType, woConfig).filter(r => r.length > 0).length, 0);
-  const delRows = (includeDEL && (woType === "INT" || woType === "INL")) ? sites.filter(rowComplete).length : 0;
+  const totalRows = sites.filter(rowComplete).reduce((sum, site) => sum + buildRows(site, projectId, displayName, woType, woConfig, ALL_WO_TYPES).filter(r => r.length > 0).length, 0);
+  const delRows = includeDEL ? sites.filter(rowComplete).length : 0;
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -827,22 +845,38 @@ export default function App() {
             <div>
               <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Work Order Type — one CSV per run</div>
               <div style={{ display: "grid", gap: 8 }}>
-                {Object.entries(WO_TYPES).map(([key, wot]) => (
-                  <div key={key} className={`wo-card${woType === key ? " selected" : ""}`} onClick={() => { setWoType(key); setWoConfig({ ...WO_DEFAULTS[key] }); }}>
+                {Object.entries(ALL_WO_TYPES).map(([key, wot]) => (
+                  <div key={key} className={`wo-card${woType === key ? " selected" : ""}`} onClick={() => { setWoType(key); setWoConfig(WO_DEFAULTS[key] ? { ...WO_DEFAULTS[key] } : { templateId: "", startTime: "", defaultDate: "", techType: "", numTechs: wot.numTechs?.toString() || "1", numDays: wot.numDays?.toString() || "1", budgetTech: "", payRate: "", approxHours: "", country: "" }); }}>
                     <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${woType === key ? T.accent : T.textFaint}`, background: woType === key ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       {woType === key && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#000" }} />}
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, color: woType === key ? T.accentHi : T.textMid }}>{key}</div>
-                      <div style={{ fontSize: 11, color: T.textDim, marginTop: 1 }}>{wot.label} · {wot.desc}</div>
+                      <div style={{ fontSize: 11, color: T.textDim, marginTop: 1 }}>{wot.label || key}{wot.desc ? ` · ${wot.desc}` : ""}</div>
                     </div>
-                    <div style={{ fontSize: 11, color: T.textFaint, textAlign: "right", lineHeight: 1.7 }}>
-                      <div>Template <span style={{ color: T.textMid }}>{wot.templateId}</span></div>
-                      <div>Budget <span style={{ color: T.textMid }}>${wot.maxBudget}</span> · Pay <span style={{ color: T.textMid }}>${wot.payRate}</span></div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                      {customWoTypes[key] && (
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button onClick={e => { e.stopPropagation(); setEditingCustomKey(key); setCustomForm({ key, label: wot.label || "", siteIdSuffix: wot.siteIdSuffix || key, numTechs: wot.numTechs?.toString() || "1", numDays: wot.numDays?.toString() || "1", useBundle: !!wot.useBundle }); setShowCustomModal(true); }} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 5, padding: "2px 8px", color: T.textDim, cursor: "pointer", fontSize: 10 }}>edit</button>
+                          <button onClick={e => { e.stopPropagation(); const next = { ...customWoTypes }; delete next[key]; saveCustomWoTypes(next); if (woType === key) setWoType("LVL"); }} style={{ background: "transparent", border: "1px solid #ef4444", borderRadius: 5, padding: "2px 8px", color: "#ef4444", cursor: "pointer", fontSize: 10 }}>✕</button>
+                        </div>
+                      )}
+                      <div style={{ fontSize: 11, color: T.textFaint, textAlign: "right", lineHeight: 1.7 }}>
+                        <div>{wot.numTechs} tech{wot.numTechs > 1 ? "s" : ""} × {wot.numDays} day{wot.numDays > 1 ? "s" : ""}</div>
+                        <div>Bundle: <span style={{ color: T.textMid }}>{wot.useBundle ? "yes" : "no"}</span></div>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
+              <button
+                onClick={() => { setEditingCustomKey(null); setCustomForm({ key: "", label: "", siteIdSuffix: "", numTechs: "1", numDays: "1", useBundle: false }); setShowCustomModal(true); }}
+                style={{ marginTop: 8, width: "100%", background: "transparent", border: `1px dashed ${T.border2}`, borderRadius: 10, padding: "10px", color: T.textDim, cursor: "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                onMouseEnter={e => e.currentTarget.style.borderColor=T.accent}
+                onMouseLeave={e => e.currentTarget.style.borderColor=T.border2}
+              >
+                <span style={{ fontSize: 16 }}>＋</span> Add Custom WO Type
+              </button>
             </div>
 
             {/* Config form for selected WO type */}
@@ -922,18 +956,17 @@ export default function App() {
                 </div>
                 <div style={{ marginTop: 12, padding: "8px 12px", background: T.surface2, borderRadius: 7, fontSize: 11, color: T.textFaint, lineHeight: 1.7 }}>
                   Pattern: <span style={{ color: T.textMid }}>{woConfig.numTechs} tech{Number(woConfig.numTechs) > 1 ? "s" : ""} × {woConfig.numDays} day{Number(woConfig.numDays) > 1 ? "s" : ""}</span>
-                  &nbsp;·&nbsp; Site ID suffix: <span style={{ color: T.accentHi }}>{WO_TYPES[woType].siteIdSuffix}</span>
-                  &nbsp;·&nbsp; Bundle: <span style={{ color: T.textMid }}>{WO_TYPES[woType].useBundle ? "yes" : "no"}</span>
+                  &nbsp;·&nbsp; Site ID suffix: <span style={{ color: T.accentHi }}>{ALL_WO_TYPES[woType]?.siteIdSuffix}</span>
+                  &nbsp;·&nbsp; Bundle: <span style={{ color: T.textMid }}>{ALL_WO_TYPES[woType]?.useBundle ? "yes" : "no"}</span>
                 </div>
-                {(woType === "INT" || woType === "INL") && (
-                  <>
+                {
                     <div style={{ marginTop: 10, padding: "10px 14px", background: T.surface2, borderRadius: 7, border: `1px solid ${includeDEL ? T.accent : T.border}`, display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setIncludeDEL(d => !d)}>
                       <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${includeDEL ? T.accent : T.border2}`, background: includeDEL ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         {includeDEL && <span style={{ color: "#000", fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>}
                       </div>
                       <div>
                         <div style={{ fontSize: 12, color: includeDEL ? T.text : T.textMid, fontWeight: 600 }}>Also generate DEL work order on Day 1</div>
-                        <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>Creates 1 DEL WO per site · same start date as {woType} · configure below when enabled</div>
+                        <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>Creates 1 DEL WO per site on Day 1 · configure below when enabled</div>
                       </div>
                     </div>
                     {includeDEL && (
@@ -999,8 +1032,7 @@ export default function App() {
                         </div>
                       </div>
                     )}
-                  </>
-                )}
+                }
               </div>
             )}
           </div>
@@ -1141,7 +1173,7 @@ export default function App() {
               <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1.1rem" }}>
                 <div style={{ fontSize: 10, color: T.textFaint, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Work Order Type</div>
                 <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 18, letterSpacing: 2, color: T.accent }}>{woType}</div>
-                <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>{WO_TYPES[woType].label}</div>
+                <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>{ALL_WO_TYPES[woType]?.label || woType}</div>
               </div>
             </div>
 
@@ -1212,7 +1244,7 @@ export default function App() {
             </div>
 
             <button onClick={downloadCSV} disabled={generating} style={{ width: "100%", padding: "1rem", borderRadius: 10, border: "none", cursor: generating ? "not-allowed" : "pointer", background: generating ? T.disabledBg : `linear-gradient(135deg,${T.accent},#dc6209)`, color: generating ? T.disabledText : "#000", fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, transition: "all .2s", boxShadow: generating ? "none" : "0 4px 24px rgba(234,88,12,.35)" }}>
-              {generating ? "⏳  BUILDING CSV..." : includeDEL && (woType === "INT" || woType === "INL") ? `⬇  DOWNLOAD ${woType} + DEL CSVs` : `⬇  DOWNLOAD ${woType} CSV`}
+              {generating ? "⏳  BUILDING CSV..." : includeDEL ? `⬇  DOWNLOAD ${woType} + DEL CSVs` : `⬇  DOWNLOAD ${woType} CSV`}
             </button>
             <div style={{ fontSize: 11, color: T.textFaint, textAlign: "center", marginTop: 8 }}>
               Single CSV file · Ready to upload directly to FieldNation
