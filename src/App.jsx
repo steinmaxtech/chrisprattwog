@@ -259,6 +259,12 @@ export default function App() {
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [editingCustomKey, setEditingCustomKey] = useState(null);
   const [customForm, setCustomForm] = useState({ key: "", label: "", siteIdSuffix: "", numTechs: "1", numDays: "1", useBundle: false });
+  const [deletedBuiltins, setDeletedBuiltins] = useState({});
+  const [overriddenBuiltins, setOverriddenBuiltins] = useState({});
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { key, isBuiltin }
+  const [deletePw, setDeletePw] = useState("");
+  const [deletePwError, setDeletePwError] = useState(false);
+  const [showRecoverModal, setShowRecoverModal] = useState(false);
   const [projectIdHistory, setProjectIdHistory] = useState([]);
   const [displayNameHistory, setDisplayNameHistory] = useState([]);
   const [showPidDropdown, setShowPidDropdown] = useState(false);
@@ -266,7 +272,11 @@ export default function App() {
   const [pendingTidLabel, setPendingTidLabel] = useState(null); // {type, id} waiting for label
   const [tidLabelInput, setTidLabelInput] = useState("");
 
-  const ALL_WO_TYPES = { ...WO_TYPES, ...customWoTypes };
+  const ALL_WO_TYPES = Object.fromEntries(
+    Object.entries({ ...WO_TYPES, ...customWoTypes })
+      .filter(([k]) => !deletedBuiltins[k])
+      .map(([k, v]) => [k, overriddenBuiltins[k] ? { ...v, ...overriddenBuiltins[k] } : v])
+  );
 
   // Load saved template ID history from Supabase on mount
   useEffect(() => {
@@ -276,7 +286,14 @@ export default function App() {
       .catch(() => {});
     sbFetch("/custom_wo_types?id=eq.1&select=data")
       .then(r => r.ok ? r.json() : null)
-      .then(rows => { if (rows?.[0]?.data) setCustomWoTypes(rows[0].data); })
+      .then(rows => {
+        if (rows?.[0]?.data) {
+          const d = rows[0].data;
+          if (d.custom) setCustomWoTypes(d.custom);
+          if (d.deletedBuiltins) setDeletedBuiltins(d.deletedBuiltins);
+          if (d.overriddenBuiltins) setOverriddenBuiltins(d.overriddenBuiltins);
+        }
+      })
       .catch(() => {});
     sbFetch("/project_history?id=eq.1&select=project_ids,display_names")
       .then(r => r.ok ? r.json() : null)
@@ -323,12 +340,23 @@ export default function App() {
     });
   };
 
-  const saveCustomWoTypes = (next) => {
-    setCustomWoTypes(next);
+  const persistWoTypeData = (custom, deleted, overridden) => {
     sbFetch("/custom_wo_types?id=eq.1", {
       method: "PATCH", prefer: "return=minimal",
-      body: JSON.stringify({ data: next, updated_at: new Date().toISOString() })
+      body: JSON.stringify({ data: { custom, deletedBuiltins: deleted, overriddenBuiltins: overridden }, updated_at: new Date().toISOString() })
     }).catch(() => {});
+  };
+  const saveCustomWoTypes = (next, deleted = deletedBuiltins, overridden = overriddenBuiltins) => {
+    setCustomWoTypes(next);
+    persistWoTypeData(next, deleted, overridden);
+  };
+  const saveDeletedBuiltins = (next) => {
+    setDeletedBuiltins(next);
+    persistWoTypeData(customWoTypes, next, overriddenBuiltins);
+  };
+  const saveOverriddenBuiltins = (next) => {
+    setOverriddenBuiltins(next);
+    persistWoTypeData(customWoTypes, deletedBuiltins, next);
   };
 
   const getEntryLabel = (type, id) => {
@@ -855,12 +883,10 @@ export default function App() {
                       <div style={{ fontSize: 11, color: T.textDim, marginTop: 1 }}>{wot.label || key}{wot.desc ? ` · ${wot.desc}` : ""}</div>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                      {customWoTypes[key] && (
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <button onClick={e => { e.stopPropagation(); setEditingCustomKey(key); setCustomForm({ key, label: wot.label || "", siteIdSuffix: wot.siteIdSuffix || key, numTechs: wot.numTechs?.toString() || "1", numDays: wot.numDays?.toString() || "1", useBundle: !!wot.useBundle }); setShowCustomModal(true); }} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 5, padding: "2px 8px", color: T.textDim, cursor: "pointer", fontSize: 10 }}>edit</button>
-                          <button onClick={e => { e.stopPropagation(); const next = { ...customWoTypes }; delete next[key]; saveCustomWoTypes(next); if (woType === key) setWoType("LVL"); }} style={{ background: "transparent", border: "1px solid #ef4444", borderRadius: 5, padding: "2px 8px", color: "#ef4444", cursor: "pointer", fontSize: 10 }}>✕</button>
-                        </div>
-                      )}
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button onClick={e => { e.stopPropagation(); setEditingCustomKey(key); setCustomForm({ key, label: wot.label || "", siteIdSuffix: wot.siteIdSuffix || key, numTechs: wot.numTechs?.toString() || "1", numDays: wot.numDays?.toString() || "1", useBundle: !!wot.useBundle }); setShowCustomModal(true); }} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 5, padding: "2px 8px", color: T.textDim, cursor: "pointer", fontSize: 10 }}>edit</button>
+                        <button onClick={e => { e.stopPropagation(); setDeletePw(""); setDeletePwError(false); setDeleteConfirm({ key, isBuiltin: !!WO_TYPES[key] }); }} style={{ background: "transparent", border: "1px solid #ef4444", borderRadius: 5, padding: "2px 8px", color: "#ef4444", cursor: "pointer", fontSize: 10 }}>delete</button>
+                      </div>
                       <div style={{ fontSize: 11, color: T.textFaint, textAlign: "right", lineHeight: 1.7 }}>
                         <div>{wot.numTechs} tech{wot.numTechs > 1 ? "s" : ""} × {wot.numDays} day{wot.numDays > 1 ? "s" : ""}</div>
                         <div>Bundle: <span style={{ color: T.textMid }}>{wot.useBundle ? "yes" : "no"}</span></div>
@@ -877,6 +903,9 @@ export default function App() {
               >
                 <span style={{ fontSize: 16 }}>＋</span> Add Custom WO Type
               </button>
+              {Object.keys(deletedBuiltins).length > 0 && (
+                <button onClick={() => setShowRecoverModal(true)} style={{ marginTop: 6, width: "100%", background: "transparent", border: `1px dashed #22c55e`, borderRadius: 10, padding: "8px", color: "#22c55e", cursor: "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>↩ Recover Deleted WO Types ({Object.keys(deletedBuiltins).length})</button>
+              )}
             </div>
 
             {/* Config form for selected WO type */}
@@ -1324,6 +1353,72 @@ export default function App() {
           </div>
         )}
 
+        {/* Delete confirm modal */}
+        {deleteConfirm && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.65)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div style={{ background: T.surface, border: "1px solid #ef4444", borderRadius: 14, padding: "1.5rem", width: "100%", maxWidth: 380 }}>
+              <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 18, letterSpacing: 3, color: "#ef4444", marginBottom: 10 }}>DELETE WO TYPE</div>
+              <div style={{ fontSize: 12, color: T.textDim, marginBottom: 16, lineHeight: 1.7 }}>
+                You are about to delete <span style={{ color: T.text, fontWeight: 600 }}>{deleteConfirm.key}</span>.{deleteConfirm.isBuiltin ? " Built-in types can be recovered later." : " Custom types are permanently removed."}<br/>Enter the admin password to confirm.
+              </div>
+              <input
+                type="password"
+                placeholder="Admin password"
+                value={deletePw}
+                onChange={e => { setDeletePw(e.target.value); setDeletePwError(false); }}
+                style={{ ...T.inp, width: "100%", marginBottom: 6, ...(deletePwError ? { borderColor: "#ef4444" } : {}) }}
+                onKeyDown={e => { if (e.key === "Enter") e.currentTarget.nextSibling?.nextSibling?.click(); }}
+                autoFocus
+              />
+              {deletePwError && <div style={{ fontSize: 11, color: "#ef4444", marginBottom: 10 }}>⚠ Incorrect password</div>}
+              <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                <button onClick={() => setDeleteConfirm(null)} style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>Cancel</button>
+                <button onClick={() => {
+                  const adminPw = import.meta.env.VITE_DELETE_PASSWORD || import.meta.env.VITE_APP_PASSWORD;
+                  if (deletePw !== adminPw) { setDeletePwError(true); return; }
+                  const k = deleteConfirm.key;
+                  if (deleteConfirm.isBuiltin) {
+                    const next = { ...deletedBuiltins, [k]: true };
+                    saveDeletedBuiltins(next);
+                  } else {
+                    const next = { ...customWoTypes };
+                    delete next[k];
+                    saveCustomWoTypes(next);
+                  }
+                  if (woType === k) setWoType(Object.keys(ALL_WO_TYPES).find(x => x !== k) || "LVL");
+                  setDeleteConfirm(null);
+                }} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2 }}>CONFIRM DELETE</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Recover deleted built-ins modal */}
+        {showRecoverModal && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "1.5rem", width: "100%", maxWidth: 380 }}>
+              <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 18, letterSpacing: 3, color: T.accentHi, marginBottom: 14 }}>RECOVER WO TYPES</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+                {Object.keys(deletedBuiltins).map(k => (
+                  <div key={k} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: T.surface2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div>
+                      <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, letterSpacing: 2, color: T.textMid }}>{k}</div>
+                      <div style={{ fontSize: 11, color: T.textFaint }}>{WO_TYPES[k]?.label}</div>
+                    </div>
+                    <button onClick={() => {
+                      const next = { ...deletedBuiltins };
+                      delete next[k];
+                      saveDeletedBuiltins(next);
+                      if (Object.keys(next).length === 0) setShowRecoverModal(false);
+                    }} style={{ background: "#22c55e", border: "none", borderRadius: 6, padding: "6px 14px", color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1 }}>↩ RESTORE</button>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => setShowRecoverModal(false)} style={{ width: "100%", padding: "10px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>Close</button>
+            </div>
+          </div>
+        )}
+
         {/* Custom WO Type modal */}
         {showCustomModal && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -1371,10 +1466,16 @@ export default function App() {
                       numDays: Number(customForm.numDays) || 1,
                       useBundle: !!customForm.useBundle
                     };
-                    const next = { ...customWoTypes, [k]: entry };
-                    saveCustomWoTypes(next);
+                    if (WO_TYPES[k]) {
+                      // Editing a built-in — store as override
+                      const nextOv = { ...overriddenBuiltins, [k]: entry };
+                      saveOverriddenBuiltins(nextOv);
+                    } else {
+                      const next = { ...customWoTypes, [k]: entry };
+                      saveCustomWoTypes(next);
+                    }
                     setWoType(k);
-                    setWoConfig({ templateId: "", startTime: "", defaultDate: "", techType: "", numTechs: entry.numTechs.toString(), numDays: entry.numDays.toString(), budgetTech: "", payRate: "", approxHours: "", country: "" });
+                    setWoConfig(WO_DEFAULTS[k] ? { ...WO_DEFAULTS[k] } : { templateId: "", startTime: "", defaultDate: "", techType: "", numTechs: entry.numTechs.toString(), numDays: entry.numDays.toString(), budgetTech: "", payRate: "", approxHours: "", country: "" });
                     setShowCustomModal(false);
                   }}
                   style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: (customForm.key.trim() || editingCustomKey) ? `linear-gradient(135deg,${T.accent},#dc6209)` : T.disabledBg, color: (customForm.key.trim() || editingCustomKey) ? "#000" : T.disabledText, cursor: (customForm.key.trim() || editingCustomKey) ? "pointer" : "not-allowed", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}
