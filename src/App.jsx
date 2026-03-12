@@ -1324,6 +1324,68 @@ export default function App() {
           </div>
         )}
 
+        {/* Custom WO Type modal */}
+        {showCustomModal && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "1.5rem", width: "100%", maxWidth: 420 }}>
+              <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accentHi, marginBottom: 16 }}>{editingCustomKey ? "EDIT CUSTOM WO TYPE" : "NEW CUSTOM WO TYPE"}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[
+                  { key: "key",          label: "Type Code (e.g. SRV)", ph: "SRV",                  readOnly: !!editingCustomKey, span: false },
+                  { key: "label",        label: "Description",          ph: "SRV — Service Visit",  readOnly: false,               span: true  },
+                  { key: "siteIdSuffix", label: "Site ID Suffix",       ph: "SRV",                  readOnly: false,               span: false },
+                  { key: "numTechs",     label: "Default # Techs",      ph: "1",                    readOnly: false,               span: false },
+                  { key: "numDays",      label: "Default # Days",       ph: "1",                    readOnly: false,               span: false },
+                ].map(({ key, label, ph, readOnly, span }) => (
+                  <div key={key} style={span ? { gridColumn: "span 2" } : {}}>
+                    <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>{label}</label>
+                    <input
+                      style={{ ...T.inp, ...(readOnly ? { opacity: 0.5 } : {}) }}
+                      placeholder={ph}
+                      value={customForm[key] || ""}
+                      readOnly={readOnly}
+                      onChange={e => !readOnly && setCustomForm(prev => ({ ...prev, [key]: key === "key" ? e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6) : e.target.value }))}
+                      onFocus={e => !readOnly && (e.target.style.borderColor = T.accent)}
+                      onBlur={e => (e.target.style.borderColor = T.border2)}
+                    />
+                  </div>
+                ))}
+                <div style={{ gridColumn: "span 2", display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 0" }} onClick={() => setCustomForm(prev => ({ ...prev, useBundle: !prev.useBundle }))}>
+                  <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${customForm.useBundle ? T.accent : T.border2}`, background: customForm.useBundle ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {customForm.useBundle && <span style={{ color: "#000", fontSize: 11, fontWeight: 700 }}>✓</span>}
+                  </div>
+                  <span style={{ fontSize: 12, color: T.textMid }}>Bundle work orders by Site ID</span>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+                <button onClick={() => setShowCustomModal(false)} style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>Cancel</button>
+                <button
+                  disabled={!editingCustomKey && !customForm.key.trim()}
+                  onClick={() => {
+                    const k = editingCustomKey || customForm.key.trim();
+                    if (!k) return;
+                    const entry = {
+                      label: customForm.label || k,
+                      siteIdSuffix: customForm.siteIdSuffix || k,
+                      numTechs: Number(customForm.numTechs) || 1,
+                      numDays: Number(customForm.numDays) || 1,
+                      useBundle: !!customForm.useBundle
+                    };
+                    const next = { ...customWoTypes, [k]: entry };
+                    saveCustomWoTypes(next);
+                    setWoType(k);
+                    setWoConfig({ templateId: "", startTime: "", defaultDate: "", techType: "", numTechs: entry.numTechs.toString(), numDays: entry.numDays.toString(), budgetTech: "", payRate: "", approxHours: "", country: "" });
+                    setShowCustomModal(false);
+                  }}
+                  style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: (customForm.key.trim() || editingCustomKey) ? `linear-gradient(135deg,${T.accent},#dc6209)` : T.disabledBg, color: (customForm.key.trim() || editingCustomKey) ? "#000" : T.disabledText, cursor: (customForm.key.trim() || editingCustomKey) ? "pointer" : "not-allowed", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}
+                >
+                  {editingCustomKey ? "SAVE CHANGES" : "CREATE TYPE"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Template ID label prompt modal */}
         {pendingTidLabel && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
