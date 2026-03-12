@@ -204,8 +204,6 @@ export default function App() {
   const inputRefs = useRef({});
   const [dark, setDark] = useState(() => { try { return sessionStorage.getItem("cpwog_dark") === "1"; } catch { return false; } });
 
-  const ALL_WO_TYPES = { ...WO_TYPES, ...customWoTypes };
-
   // Track previous woConfig to detect which fields changed
   const prevConfigRef = useRef(woConfig);
   useEffect(() => {
@@ -267,6 +265,8 @@ export default function App() {
   const [showDnDropdown, setShowDnDropdown] = useState(false);
   const [pendingTidLabel, setPendingTidLabel] = useState(null); // {type, id} waiting for label
   const [tidLabelInput, setTidLabelInput] = useState("");
+
+  const ALL_WO_TYPES = { ...WO_TYPES, ...customWoTypes };
 
   // Load saved template ID history from Supabase on mount
   useEffect(() => {
