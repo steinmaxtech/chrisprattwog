@@ -265,6 +265,10 @@ export default function App() {
   const [deletePw, setDeletePw] = useState("");
   const [deletePwError, setDeletePwError] = useState(false);
   const [showRecoverModal, setShowRecoverModal] = useState(false);
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [showLockModal, setShowLockModal] = useState(false);
+  const [lockPwInput, setLockPwInput] = useState("");
+  const [lockPwError, setLockPwError] = useState(false);
   const [projectIdHistory, setProjectIdHistory] = useState([]);
   const [displayNameHistory, setDisplayNameHistory] = useState([]);
   const [showPidDropdown, setShowPidDropdown] = useState(false);
@@ -820,6 +824,16 @@ export default function App() {
             <button onClick={() => setDark(d => !d)} style={{ marginLeft: 12, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, transition: "all .15s" }}>
               {dark ? "☀ Light" : "🌙 Dark"}
             </button>
+            <button
+              onClick={() => {
+                if (adminUnlocked) { setAdminUnlocked(false); }
+                else { setLockPwInput(""); setLockPwError(false); setShowLockModal(true); }
+              }}
+              title={adminUnlocked ? "Lock admin mode" : "Unlock edit & delete"}
+              style={{ background: adminUnlocked ? "rgba(234,88,12,0.15)" : "transparent", border: `1px solid ${adminUnlocked ? T.accent : T.border2}`, borderRadius: 20, padding: "5px 12px", color: adminUnlocked ? T.accent : T.textMid, cursor: "pointer", fontSize: 15, display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}
+            >
+              {adminUnlocked ? "🔓" : "🔒"}
+            </button>
           </div>
         </div>
       </div>
@@ -883,10 +897,12 @@ export default function App() {
                       <div style={{ fontSize: 11, color: T.textDim, marginTop: 1 }}>{wot.label || key}{wot.desc ? ` · ${wot.desc}` : ""}</div>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <button onClick={e => { e.stopPropagation(); setEditingCustomKey(key); setCustomForm({ key, label: wot.label || "", siteIdSuffix: wot.siteIdSuffix || key, numTechs: wot.numTechs?.toString() || "1", numDays: wot.numDays?.toString() || "1", useBundle: !!wot.useBundle }); setShowCustomModal(true); }} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 5, padding: "2px 8px", color: T.textDim, cursor: "pointer", fontSize: 10 }}>edit</button>
-                        <button onClick={e => { e.stopPropagation(); setDeletePw(""); setDeletePwError(false); setDeleteConfirm({ key, isBuiltin: !!WO_TYPES[key] }); }} style={{ background: "transparent", border: "1px solid #ef4444", borderRadius: 5, padding: "2px 8px", color: "#ef4444", cursor: "pointer", fontSize: 10 }}>delete</button>
-                      </div>
+                      {adminUnlocked && (
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button onClick={e => { e.stopPropagation(); setEditingCustomKey(key); setCustomForm({ key, label: wot.label || "", siteIdSuffix: wot.siteIdSuffix || key, numTechs: wot.numTechs?.toString() || "1", numDays: wot.numDays?.toString() || "1", useBundle: !!wot.useBundle }); setShowCustomModal(true); }} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 5, padding: "2px 8px", color: T.textDim, cursor: "pointer", fontSize: 10 }}>edit</button>
+                          <button onClick={e => { e.stopPropagation(); setDeletePw(""); setDeletePwError(false); setDeleteConfirm({ key, isBuiltin: !!WO_TYPES[key] }); }} style={{ background: "transparent", border: "1px solid #ef4444", borderRadius: 5, padding: "2px 8px", color: "#ef4444", cursor: "pointer", fontSize: 10 }}>delete</button>
+                        </div>
+                      )}
                       <div style={{ fontSize: 11, color: T.textFaint, textAlign: "right", lineHeight: 1.7 }}>
                         <div>{wot.numTechs} tech{wot.numTechs > 1 ? "s" : ""} × {wot.numDays} day{wot.numDays > 1 ? "s" : ""}</div>
                         <div>Bundle: <span style={{ color: T.textMid }}>{wot.useBundle ? "yes" : "no"}</span></div>
@@ -895,15 +911,17 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              <button
-                onClick={() => { setEditingCustomKey(null); setCustomForm({ key: "", label: "", siteIdSuffix: "", numTechs: "1", numDays: "1", useBundle: false }); setShowCustomModal(true); }}
-                style={{ marginTop: 8, width: "100%", background: "transparent", border: `1px dashed ${T.border2}`, borderRadius: 10, padding: "10px", color: T.textDim, cursor: "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
-                onMouseEnter={e => e.currentTarget.style.borderColor=T.accent}
-                onMouseLeave={e => e.currentTarget.style.borderColor=T.border2}
-              >
-                <span style={{ fontSize: 16 }}>＋</span> Add Custom WO Type
-              </button>
-              {Object.keys(deletedBuiltins).length > 0 && (
+              {adminUnlocked && (
+                <button
+                  onClick={() => { setEditingCustomKey(null); setCustomForm({ key: "", label: "", siteIdSuffix: "", numTechs: "1", numDays: "1", useBundle: false }); setShowCustomModal(true); }}
+                  style={{ marginTop: 8, width: "100%", background: "transparent", border: `1px dashed ${T.border2}`, borderRadius: 10, padding: "10px", color: T.textDim, cursor: "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor=T.accent}
+                  onMouseLeave={e => e.currentTarget.style.borderColor=T.border2}
+                >
+                  <span style={{ fontSize: 16 }}>＋</span> Add Custom WO Type
+                </button>
+              )}
+              {adminUnlocked && Object.keys(deletedBuiltins).length > 0 && (
                 <button onClick={() => setShowRecoverModal(true)} style={{ marginTop: 6, width: "100%", background: "transparent", border: `1px dashed #22c55e`, borderRadius: 10, padding: "8px", color: "#22c55e", cursor: "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>↩ Recover Deleted WO Types ({Object.keys(deletedBuiltins).length})</button>
               )}
             </div>
@@ -1353,29 +1371,49 @@ export default function App() {
           </div>
         )}
 
+        {/* Admin lock/unlock modal */}
+        {showLockModal && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div style={{ background: T.surface, border: `1px solid ${T.accent}`, borderRadius: 14, padding: "1.5rem", width: "100%", maxWidth: 360 }}>
+              <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accentHi, marginBottom: 6 }}>🔓 ADMIN UNLOCK</div>
+              <div style={{ fontSize: 12, color: T.textDim, marginBottom: 16, lineHeight: 1.6 }}>Enter the admin password to enable editing and deleting of work order types.</div>
+              <input
+                type="password"
+                placeholder="Admin password"
+                value={lockPwInput}
+                autoFocus
+                onChange={e => { setLockPwInput(e.target.value); setLockPwError(false); }}
+                onKeyDown={e => { if (e.key === "Enter") {
+                  const adminPw = import.meta.env.VITE_DELETE_PASSWORD || import.meta.env.VITE_APP_PASSWORD;
+                  if (lockPwInput === adminPw) { setAdminUnlocked(true); setShowLockModal(false); }
+                  else setLockPwError(true);
+                }}}
+                style={{ ...T.inp, width: "100%", marginBottom: 6, ...(lockPwError ? { borderColor: "#ef4444" } : {}) }}
+              />
+              {lockPwError && <div style={{ fontSize: 11, color: "#ef4444", marginBottom: 10 }}>⚠ Incorrect password</div>}
+              <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                <button onClick={() => setShowLockModal(false)} style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>Cancel</button>
+                <button onClick={() => {
+                  const adminPw = import.meta.env.VITE_DELETE_PASSWORD || import.meta.env.VITE_APP_PASSWORD;
+                  if (lockPwInput === adminPw) { setAdminUnlocked(true); setShowLockModal(false); }
+                  else setLockPwError(true);
+                }} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}>UNLOCK</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Delete confirm modal */}
         {deleteConfirm && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.65)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
             <div style={{ background: T.surface, border: "1px solid #ef4444", borderRadius: 14, padding: "1.5rem", width: "100%", maxWidth: 380 }}>
               <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 18, letterSpacing: 3, color: "#ef4444", marginBottom: 10 }}>DELETE WO TYPE</div>
               <div style={{ fontSize: 12, color: T.textDim, marginBottom: 16, lineHeight: 1.7 }}>
-                You are about to delete <span style={{ color: T.text, fontWeight: 600 }}>{deleteConfirm.key}</span>.{deleteConfirm.isBuiltin ? " Built-in types can be recovered later." : " Custom types are permanently removed."}<br/>Enter the admin password to confirm.
+                You are about to delete <span style={{ color: T.text, fontWeight: 600 }}>{deleteConfirm.key}</span>.{deleteConfirm.isBuiltin ? " Built-in types can be recovered later." : " Custom types are permanently removed."}
               </div>
-              <input
-                type="password"
-                placeholder="Admin password"
-                value={deletePw}
-                onChange={e => { setDeletePw(e.target.value); setDeletePwError(false); }}
-                style={{ ...T.inp, width: "100%", marginBottom: 6, ...(deletePwError ? { borderColor: "#ef4444" } : {}) }}
-                onKeyDown={e => { if (e.key === "Enter") e.currentTarget.nextSibling?.nextSibling?.click(); }}
-                autoFocus
-              />
-              {deletePwError && <div style={{ fontSize: 11, color: "#ef4444", marginBottom: 10 }}>⚠ Incorrect password</div>}
               <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
                 <button onClick={() => setDeleteConfirm(null)} style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>Cancel</button>
                 <button onClick={() => {
-                  const adminPw = import.meta.env.VITE_DELETE_PASSWORD || import.meta.env.VITE_APP_PASSWORD;
-                  if (deletePw !== adminPw) { setDeletePwError(true); return; }
                   const k = deleteConfirm.key;
                   if (deleteConfirm.isBuiltin) {
                     const next = { ...deletedBuiltins, [k]: true };
