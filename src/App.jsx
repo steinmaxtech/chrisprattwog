@@ -959,7 +959,7 @@ export default function App() {
                   &nbsp;·&nbsp; Site ID suffix: <span style={{ color: T.accentHi }}>{ALL_WO_TYPES[woType]?.siteIdSuffix}</span>
                   &nbsp;·&nbsp; Bundle: <span style={{ color: T.textMid }}>{ALL_WO_TYPES[woType]?.useBundle ? "yes" : "no"}</span>
                 </div>
-                {
+                <>
                     <div style={{ marginTop: 10, padding: "10px 14px", background: T.surface2, borderRadius: 7, border: `1px solid ${includeDEL ? T.accent : T.border}`, display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setIncludeDEL(d => !d)}>
                       <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${includeDEL ? T.accent : T.border2}`, background: includeDEL ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         {includeDEL && <span style={{ color: "#000", fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>}
@@ -1032,7 +1032,7 @@ export default function App() {
                         </div>
                       </div>
                     )}
-                }
+                </>
               </div>
             )}
           </div>
