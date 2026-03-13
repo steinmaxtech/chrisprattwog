@@ -806,7 +806,7 @@ export default function App() {
         const delRows = [];
         for (const site of sites) {
           if (!site.address && !site.code) continue;
-          const siteDay1 = { ...site, numTechs: "1", numDays: "1" };
+          const siteDay1 = { ...site, numTechs: "1", numDays: "1", budgetTech: "", payRate: "" };
           delRows.push(...buildRows(siteDay1, projectId, displayName, "DEL", delCfg, ALL_WO_TYPES));
         }
         if (delRows.length && delRows[delRows.length-1].length === 0) delRows.pop();
