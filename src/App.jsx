@@ -266,6 +266,9 @@ export default function App() {
   const [deletePwError, setDeletePwError] = useState(false);
   const [showRecoverModal, setShowRecoverModal] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [jobHistory, setJobHistory] = useState([]);
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
   const [showLockModal, setShowLockModal] = useState(false);
   const [lockPwInput, setLockPwInput] = useState("");
   const [lockPwError, setLockPwError] = useState(false);
@@ -287,6 +290,10 @@ export default function App() {
     sbFetch("/template_id_history?id=eq.1&select=data")
       .then(r => r.ok ? r.json() : null)
       .then(rows => { if (rows?.[0]?.data) setTemplateIdHistory(rows[0].data); })
+      .catch(() => {});
+    sbFetch("/job_history?select=*&order=created_at.desc&limit=100")
+      .then(r => r.ok ? r.json() : null)
+      .then(rows => { if (Array.isArray(rows)) setJobHistory(rows); })
       .catch(() => {});
     sbFetch("/custom_wo_types?id=eq.1&select=data")
       .then(r => r.ok ? r.json() : null)
@@ -350,6 +357,29 @@ export default function App() {
       body: JSON.stringify({ data: { custom, deletedBuiltins: deleted, overriddenBuiltins: overridden }, updated_at: new Date().toISOString() })
     }).catch(() => {});
   };
+  const saveJob = (extraData = {}) => {
+    const job = {
+      project_id:   projectId,
+      display_name: displayName,
+      wo_type:      woType,
+      wo_config:    woConfig,
+      del_config:   includeDEL ? delConfig : null,
+      include_del:  includeDEL,
+      sites:        sites.filter(s => s.code || s.address),
+      site_count:   sites.filter(rowComplete).length,
+      created_at:   new Date().toISOString(),
+      ...extraData,
+    };
+    sbFetch("/job_history", {
+      method: "POST",
+      prefer: "return=representation",
+      body: JSON.stringify(job)
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(rows => { if (rows?.[0]) setJobHistory(prev => [rows[0], ...prev].slice(0, 100)); })
+      .catch(() => {});
+  };
+
   const saveCustomWoTypes = (next, deleted = deletedBuiltins, overridden = overriddenBuiltins) => {
     setCustomWoTypes(next);
     persistWoTypeData(next, deleted, overridden);
@@ -708,26 +738,30 @@ export default function App() {
         rows.push(...buildRows(site, projectId, displayName, woType, woConfig, ALL_WO_TYPES));
       }
       if (rows.length && rows[rows.length-1].length === 0) rows.pop();
-      triggerDownload(toCSV(WO_HEADERS, rows), `FieldNation_${woType}_${safeProject}_${datePart}_${timePart}.csv`);
+      const mainFilename = `FieldNation_${woType}_${safeProject}_${datePart}_${timePart}.csv`;
+      const mainCsv = toCSV(WO_HEADERS, rows);
+      triggerDownload(mainCsv, mainFilename);
+      const csvFiles = [{ filename: mainFilename, content: mainCsv }];
 
-      // DEL CSV (INT/INL only, when checkbox is checked)
+      // DEL CSV when checkbox is checked
       if (includeDEL) {
         const delCfg = { ...delConfig };
         if (delCfg.templateId) saveTemplateId("DEL", delCfg.templateId, "");
         const delRows = [];
         for (const site of sites) {
           if (!site.address && !site.code) continue;
-          // Only day 1 date, 1 tech, 1 day
           const siteDay1 = { ...site, numTechs: "1", numDays: "1" };
           delRows.push(...buildRows(siteDay1, projectId, displayName, "DEL", delCfg, ALL_WO_TYPES));
         }
         if (delRows.length && delRows[delRows.length-1].length === 0) delRows.pop();
         if (delRows.length) {
-          setTimeout(() => {
-            triggerDownload(toCSV(WO_HEADERS, delRows), `FieldNation_DEL_${safeProject}_${datePart}_${timePart}.csv`);
-          }, 500);
+          const delFilename = `FieldNation_DEL_${safeProject}_${datePart}_${timePart}.csv`;
+          const delCsvContent = toCSV(WO_HEADERS, delRows);
+          csvFiles.push({ filename: delFilename, content: delCsvContent });
+          setTimeout(() => { triggerDownload(delCsvContent, delFilename); }, 500);
         }
       }
+      saveJob({ csv_files: csvFiles });
     } catch (err) {
       alert("Error: " + err.message);
     }
@@ -823,6 +857,9 @@ export default function App() {
             ))}
             <button onClick={() => setDark(d => !d)} style={{ marginLeft: 12, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, transition: "all .15s" }}>
               {dark ? "☀ Light" : "🌙 Dark"}
+            </button>
+            <button onClick={() => setShowHistoryPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>
+              📋 History{jobHistory.length > 0 ? ` (${jobHistory.length})` : ""}
             </button>
             <button
               onClick={() => {
@@ -1392,6 +1429,97 @@ export default function App() {
                 <button onClick={() => setClearConfirm(false)} style={{ padding: "10px 18px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
                   Cancel
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Job History panel */}
+        {showHistoryPanel && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 400, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }} onClick={() => setShowHistoryPanel(false)}>
+            <div style={{ background: T.surface, borderLeft: `2px solid ${T.accent}`, height: "100%", width: "100%", maxWidth: 480, overflowY: "auto", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+              <div style={{ padding: "1.25rem 1.5rem", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, background: T.surface, zIndex: 1 }}>
+                <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accentHi }}>📋 JOB HISTORY</div>
+                <button onClick={() => setShowHistoryPanel(false)} style={{ background: "transparent", border: "none", color: T.textMid, cursor: "pointer", fontSize: 20 }}>✕</button>
+              </div>
+              <div style={{ padding: "0.75rem 1.5rem", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 58, background: T.surface, zIndex: 1 }}>
+                <input
+                  placeholder="Search by project, type, display name..."
+                  value={historySearch}
+                  onChange={e => setHistorySearch(e.target.value)}
+                  style={{ ...T.inp, width: "100%" }}
+                />
+              </div>
+              <div style={{ flex: 1, padding: "1rem 1.5rem", display: "flex", flexDirection: "column", gap: 10 }}>
+                {jobHistory.length === 0 && (
+                  <div style={{ color: T.textFaint, fontSize: 13, textAlign: "center", marginTop: 40 }}>No jobs saved yet.<br/>Download a CSV to record your first job.</div>
+                )}
+                {jobHistory
+                  .filter(j => {
+                    if (!historySearch.trim()) return true;
+                    const q = historySearch.toLowerCase();
+                    return (j.project_id || "").toLowerCase().includes(q) ||
+                           (j.display_name || "").toLowerCase().includes(q) ||
+                           (j.wo_type || "").toLowerCase().includes(q);
+                  })
+                  .map(job => (
+                    <div key={job.id} style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1rem", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                        <div>
+                          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, color: T.accentHi }}>{job.wo_type} — {job.project_id}</div>
+                          {job.display_name && <div style={{ fontSize: 11, color: T.textDim, marginTop: 1 }}>{job.display_name}</div>}
+                        </div>
+                        <div style={{ fontSize: 10, color: T.textFaint, whiteSpace: "nowrap", flexShrink: 0 }}>{new Date(job.created_at).toLocaleString()}</div>
+                      </div>
+                      <div style={{ fontSize: 11, color: T.textDim, lineHeight: 1.8 }}>
+                        <span style={{ color: T.textMid }}>{job.site_count}</span> sites
+                        {job.wo_config?.templateId && <> · Template <span style={{ color: T.textMid }}>{job.wo_config.templateId}</span></>}
+                        {job.wo_config?.defaultDate && <> · Date <span style={{ color: T.textMid }}>{job.wo_config.defaultDate}</span></>}
+                        {job.wo_config?.payType && <> · <span style={{ color: T.textMid }}>{job.wo_config.payType}</span></>}
+                        {job.include_del && <> · <span style={{ color: T.accent }}>+ DEL</span></>}
+                      </div>
+                      {/* Re-download stored CSVs */}
+                      {Array.isArray(job.csv_files) && job.csv_files.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                          {job.csv_files.map((f, fi) => (
+                            <button key={fi} onClick={() => {
+                              const blob = new Blob([f.content], { type: "text/csv;charset=utf-8;" });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url; a.download = f.filename; a.style.display = "none";
+                              document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                              URL.revokeObjectURL(url);
+                            }} style={{ padding: "5px 10px", borderRadius: 6, border: `1px solid ${T.border2}`, background: T.surface, color: T.textMid, cursor: "pointer", fontSize: 10, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4 }}>
+                              ⬇ {f.filename.replace(/^FieldNation_/, "").replace(/_\d{4}-\d{2}-\d{2}_.*$/, "")}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button onClick={() => {
+                          setProjectId(job.project_id || "");
+                          setDisplayName(job.display_name || "");
+                          setWoType(job.wo_type || "LVL");
+                          setWoConfig(job.wo_config || { ...BLANK_CFG });
+                          if (job.include_del && job.del_config) { setIncludeDEL(true); setDelConfig(job.del_config); } else { setIncludeDEL(false); }
+                          if (Array.isArray(job.sites) && job.sites.length) setSites(job.sites);
+                          setStep(0);
+                          setShowHistoryPanel(false);
+                        }} style={{ flex: 1, padding: "7px", borderRadius: 7, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5 }}>↩ RESTORE JOB</button>
+                        <button onClick={() => {
+                          setProjectId(job.project_id || "");
+                          setDisplayName(job.display_name || "");
+                          setWoType(job.wo_type || "LVL");
+                          setWoConfig(job.wo_config || { ...BLANK_CFG });
+                          if (job.include_del && job.del_config) { setIncludeDEL(true); setDelConfig(job.del_config); } else { setIncludeDEL(false); }
+                          setSites([{ ...EMPTY_SITE(), date: (job.wo_config || {}).defaultDate || "", numTechs: (job.wo_config || {}).numTechs || "1", numDays: (job.wo_config || {}).numDays || "1" }]);
+                          setStep(0);
+                          setShowHistoryPanel(false);
+                        }} style={{ flex: 1, padding: "7px", borderRadius: 7, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontFamily: "inherit", fontSize: 11 }}>Config only</button>
+                      </div>
+                    </div>
+                  ))
+                }
               </div>
             </div>
           </div>
