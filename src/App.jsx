@@ -14,6 +14,54 @@ const sbFetch = (path, opts = {}) => fetch(`${SUPABASE_URL}/rest/v1${path}`, {
   }
 });
 
+
+// Compress a string using gzip via CompressionStream, returns base64
+async function compressString(str) {
+  const stream = new CompressionStream("gzip");
+  const writer = stream.writable.getWriter();
+  const encoder = new TextEncoder();
+  writer.write(encoder.encode(str));
+  writer.close();
+  const chunks = [];
+  const reader = stream.readable.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  const total = chunks.reduce((n, c) => n + c.length, 0);
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) { merged.set(c, offset); offset += c.length; }
+  // Convert to base64
+  let binary = "";
+  for (let i = 0; i < merged.length; i++) binary += String.fromCharCode(merged[i]);
+  return btoa(binary);
+}
+
+// Decompress base64 gzip back to string
+async function decompressString(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const stream = new DecompressionStream("gzip");
+  const writer = stream.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  const chunks = [];
+  const reader = stream.readable.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  const total = chunks.reduce((n, c) => n + c.length, 0);
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) { merged.set(c, offset); offset += c.length; }
+  return new TextDecoder().decode(merged);
+}
+
 // WO type metadata — structure only, no hardcoded values
 const WO_TYPES = {
   LVL:  { label: "LVL — Low Voltage Lead",          siteIdSuffix: "LVL(1)", numTechs: 1, numDays: 3, useBundle: true  },
@@ -716,7 +764,7 @@ export default function App() {
     true
   ];
 
-  const downloadCSV = useCallback(() => {
+  const downloadCSV = useCallback(async () => {
     setGenerating(true);
     try {
       const now = new Date();
@@ -761,7 +809,15 @@ export default function App() {
           setTimeout(() => { triggerDownload(delCsvContent, delFilename); }, 500);
         }
       }
-      saveJob({ csv_files: csvFiles });
+      // Compress CSV content before storing in Supabase
+      const compressedFiles = await Promise.all(
+        csvFiles.map(async f => ({
+          filename: f.filename,
+          content: await compressString(f.content),
+          compressed: true
+        }))
+      );
+      saveJob({ csv_files: compressedFiles });
     } catch (err) {
       alert("Error: " + err.message);
     }
@@ -1482,8 +1538,9 @@ export default function App() {
                       {Array.isArray(job.csv_files) && job.csv_files.length > 0 && (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                           {job.csv_files.map((f, fi) => (
-                            <button key={fi} onClick={() => {
-                              const blob = new Blob([f.content], { type: "text/csv;charset=utf-8;" });
+                            <button key={fi} onClick={async () => {
+                              const content = f.compressed ? await decompressString(f.content) : f.content;
+                              const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
                               const url = URL.createObjectURL(blob);
                               const a = document.createElement("a");
                               a.href = url; a.download = f.filename; a.style.display = "none";
