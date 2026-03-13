@@ -25,7 +25,7 @@ const WO_TYPES = {
 };
 
 // Default configs per type — blank, user fills in each run
-const BLANK_CFG = { templateId: "", startTime: "", defaultDate: "", techType: "", numTechs: "1", numDays: "1", budgetTech: "", payRate: "", approxHours: "", country: "" };
+const BLANK_CFG = { templateId: "", startTime: "", defaultDate: "", techType: "", numTechs: "1", numDays: "1", budgetTech: "", payRate: "", approxHours: "", country: "", payType: "Fixed" };
 const WO_DEFAULTS = {
   LVL:  { ...BLANK_CFG, templateId: "103095" },
   LVT:  { ...BLANK_CFG, templateId: "103094" },
@@ -53,7 +53,7 @@ function buildRows(site, projectId, displayName, woType, cfg) {
         const date = addDays(site.date, d);
         const siteId = `${site.code}-${meta.siteIdSuffix}(${t})`;
         const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-        rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: `${cfg.techType} ${t}`, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName }));
+        rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: `${cfg.techType} ${t}`, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed" }));
       }
     }
   } else {
@@ -61,7 +61,7 @@ function buildRows(site, projectId, displayName, woType, cfg) {
       const date = addDays(site.date, d);
       const siteId = `${site.code}-${meta.siteIdSuffix}`;
       const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-      rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName }));
+      rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed" }));
     }
     if (numDays > 1) rows.push([]);
   }
@@ -77,14 +77,14 @@ const WO_HEADERS = [
   "Location Display Name","Location Name"
 ];
 
-function makeRow({ templateId, projectId, siteId, bundle, site, date, startTime, techType, budgetTech, maxBudget, payRate, approxHours, estDuration, country, locName }) {
+function makeRow({ templateId, projectId, siteId, bundle, site, date, startTime, techType, budgetTech, maxBudget, payRate, approxHours, estDuration, country, locName, payType }) {
   return [
     templateId, projectId, siteId, bundle,
     site.address, site.address2 || "", site.city, site.state, site.zip,
     country, "", date, "", startTime, "",
     techType, "", "",
     budgetTech, "", maxBudget, payRate,
-    "", "", "", "", approxHours, estDuration, "Fixed",
+    "", "", "", "", approxHours, estDuration, payType || "Fixed",
     locName, locName
   ];
 }
@@ -1000,11 +1000,25 @@ export default function App() {
                       <div style={{ fontSize: 10, color: T.textFaint, marginTop: 3 }}>{hint}</div>
                     </div>
                   ))}
+                  {/* Pay Type toggle */}
+                  <div style={{ gridColumn: "span 2" }}>
+                    <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>Pay Type</label>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {["Fixed", "Hourly"].map(pt => (
+                        <button key={pt} onClick={() => setWoConfig(prev => ({ ...prev, payType: pt }))}
+                          style={{ flex: 1, padding: "8px", borderRadius: 8, border: `2px solid ${(woConfig.payType || "Fixed") === pt ? T.accent : T.border2}`, background: (woConfig.payType || "Fixed") === pt ? `${T.accent}22` : "transparent", color: (woConfig.payType || "Fixed") === pt ? T.accentHi : T.textMid, cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, transition: "all .15s" }}>
+                          {pt}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 10, color: T.textFaint, marginTop: 4 }}>Sets the Pay Type column in the exported CSV</div>
+                  </div>
                 </div>
                 <div style={{ marginTop: 12, padding: "8px 12px", background: T.surface2, borderRadius: 7, fontSize: 11, color: T.textFaint, lineHeight: 1.7 }}>
                   Pattern: <span style={{ color: T.textMid }}>{woConfig.numTechs} tech{Number(woConfig.numTechs) > 1 ? "s" : ""} × {woConfig.numDays} day{Number(woConfig.numDays) > 1 ? "s" : ""}</span>
                   &nbsp;·&nbsp; Site ID suffix: <span style={{ color: T.accentHi }}>{ALL_WO_TYPES[woType]?.siteIdSuffix}</span>
                   &nbsp;·&nbsp; Bundle: <span style={{ color: T.textMid }}>{ALL_WO_TYPES[woType]?.useBundle ? "yes" : "no"}</span>
+                  &nbsp;·&nbsp; Pay Type: <span style={{ color: T.textMid }}>{woConfig.payType || "Fixed"}</span>
                 </div>
                 <>
                     <div style={{ marginTop: 10, padding: "10px 14px", background: T.surface2, borderRadius: 7, border: `1px solid ${includeDEL ? T.accent : T.border}`, display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setIncludeDEL(d => !d)}>
@@ -1076,6 +1090,18 @@ export default function App() {
                               />
                             </div>
                           ))}
+                          {/* DEL Pay Type toggle */}
+                          <div style={{ gridColumn: "span 2" }}>
+                            <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>Pay Type</label>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              {["Fixed", "Hourly"].map(pt => (
+                                <button key={pt} onClick={() => setDelConfig(prev => ({ ...prev, payType: pt }))}
+                                  style={{ flex: 1, padding: "8px", borderRadius: 8, border: `2px solid ${(delConfig.payType || "Fixed") === pt ? T.accent : T.border2}`, background: (delConfig.payType || "Fixed") === pt ? `${T.accent}22` : "transparent", color: (delConfig.payType || "Fixed") === pt ? T.accentHi : T.textMid, cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, transition: "all .15s" }}>
+                                  {pt}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
