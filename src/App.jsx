@@ -89,12 +89,14 @@ function buildRows(site, projectId, displayName, woType, cfg) {
   const meta = WO_TYPES[woType];
   const rows = [];
   const tId = Number(cfg.templateId);
-  const budget = Number(cfg.budgetTech);
-  const pay = Number(cfg.payRate);
+  const cfgBudget = Number(cfg.budgetTech);
+  const cfgPay = Number(cfg.payRate);
   const hours = Number(cfg.approxHours);
 
   const numTechs = Number(site.numTechs || cfg.numTechs) || 1;
   const numDays = Number(site.numDays || cfg.numDays) || 1;
+  const budget = site.budgetTech ? Number(site.budgetTech) : cfgBudget;
+  const pay = site.payRate ? Number(site.payRate) : cfgPay;
   if (numTechs > 1) {
     for (let t = 1; t <= numTechs; t++) {
       for (let d = 0; d < numDays; d++) {
@@ -161,7 +163,7 @@ function toCSV(headers, rows) {
 const EMPTY_SITE = () => ({
   code: "", branchName: "", address: "", address2: "",
   city: "", state: "", zip: "", date: "",
-  numTechs: "", numDays: "",
+  numTechs: "", numDays: "", budgetTech: "", payRate: "",
   verified: null, verifying: false, verifyError: ""
 });
 
@@ -176,6 +178,8 @@ const COLS = [
   { key: "date",       label: "Start Date *",width: 128, ph: "", type: "date" },
   { key: "numTechs",   label: "Techs",       width: 54,  ph: "↓" },
   { key: "numDays",    label: "Days",        width: 54,  ph: "↓" },
+  { key: "budgetTech", label: "Budget $",    width: 80,  ph: "↓" },
+  { key: "payRate",    label: "Pay $",       width: 80,  ph: "↓" },
 ];
 
 const STEP_LABELS = ["Project Info", "Add Sites", "Review & Export"];
@@ -1287,7 +1291,7 @@ export default function App() {
                                     ref={el => inputRefs.current[`${rowIdx}-${colIdx}`] = el}
                                     type={col.type || "text"}
                                     value={site[col.key]}
-                                    placeholder={col.key === 'numTechs' ? (woConfig.numTechs || col.ph) : col.key === 'numDays' ? (woConfig.numDays || col.ph) : col.key === 'date' ? (woConfig.defaultDate || col.ph) : col.ph}
+                                    placeholder={col.key === 'numTechs' ? (woConfig.numTechs || col.ph) : col.key === 'numDays' ? (woConfig.numDays || col.ph) : col.key === 'date' ? (woConfig.defaultDate || col.ph) : col.key === 'budgetTech' ? (woConfig.budgetTech || col.ph) : col.key === 'payRate' ? (woConfig.payRate || col.ph) : col.ph}
                                     onChange={e => updateSite(rowIdx, col.key, e.target.value)}
                                     onKeyDown={e => handleKeyDown(e, rowIdx, colIdx)}
                                     onFocus={() => setActiveCell({ row: rowIdx, col: colIdx })}
@@ -1390,6 +1394,24 @@ export default function App() {
                 <span style={{ color: T.textDim }}>Budget / Pay Rate</span>
                 <span style={{ color: T.textMid }}>${woConfig.budgetTech} / ${woConfig.payRate}</span>
               </div>
+              {(() => {
+                const rateOverrides = sites.filter(s => rowComplete(s) && (s.budgetTech || s.payRate));
+                if (!rateOverrides.length) return null;
+                return (
+                  <div style={{ padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 10, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 6 }}>Per-site rate overrides</div>
+                    {rateOverrides.map((s, i) => (
+                      <div key={i} style={{ fontSize: 11, color: T.textDim, lineHeight: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ color: T.textMid, fontWeight: 600 }}>↳ {s.code}</span>
+                        <span style={{ display: "flex", gap: 8 }}>
+                          <span>Budget <span style={{ color: s.budgetTech ? T.accent : T.textFaint }}>${s.budgetTech || woConfig.budgetTech}</span></span>
+                          <span>Pay <span style={{ color: s.payRate ? T.accent : T.textFaint }}>${s.payRate || woConfig.payRate}</span></span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, paddingTop: 8 }}>
                 <span style={{ color: T.textDim }}>Total data rows</span>
 <span style={{ color: T.text, fontWeight: 600 }}>{totalRows}{delRows > 0 ? ` + ${delRows} DEL` : ""}</span>
@@ -1404,6 +1426,9 @@ export default function App() {
                     <div style={{ fontSize: 12, color: T.accent, fontWeight: 600 }}>{s.code}{s.branchName ? ` — ${s.branchName}` : ""}</div>
                     <div style={{ fontSize: 11, color: T.textDim, marginTop: 2, lineHeight: 1.5 }}>{s.address}{s.address2 ? `, ${s.address2}` : ""}<br />{s.city}, {s.state} {s.zip}</div>
                     <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>Start: {s.date}</div>
+                    {(s.budgetTech || s.payRate) && (
+                      <div style={{ fontSize: 10, color: T.accent, marginTop: 2 }}>⚡ {s.budgetTech ? `$${s.budgetTech}` : `$${woConfig.budgetTech}`} / {s.payRate ? `$${s.payRate}` : `$${woConfig.payRate}`}</div>
+                    )}
                   </div>
                 ))}
               </div>
