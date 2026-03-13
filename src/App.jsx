@@ -249,8 +249,8 @@ export default function App() {
   const [pasteError, setPasteError] = useState("");
   const [clearConfirm, setClearConfirm] = useState(false);
   const [startOverConfirm, setStartOverConfirm] = useState(false);
-  const [includeDEL, setIncludeDEL] = useState(false);
-  const [delConfig, setDelConfig] = useState({ ...WO_DEFAULTS["DEL"] });
+  const [delConfig, setDelConfig] = useState(() => _s?.delConfig ?? { ...WO_DEFAULTS["DEL"] });
+  const [includeDEL, setIncludeDEL] = useState(() => _s?.includeDEL ?? false);
   const [importMode, setImportMode] = useState(false);
   const fileInputRef = useRef(null);
   const inputRefs = useRef({});
@@ -281,7 +281,7 @@ export default function App() {
 
   // Persist work state to session on every relevant change
   useEffect(() => {
-    if (authed) saveSession({ step, projectId, displayName, woType, woConfig, sites });
+    if (authed) saveSession({ step, projectId, displayName, woType, woConfig, sites, delConfig, includeDEL });
   }, [step, projectId, displayName, woType, woConfig, sites, authed]);
 
   // Persist dark mode preference
@@ -455,6 +455,10 @@ export default function App() {
   const handleContinueStep0 = () => {
     saveProjectId(projectId);
     if (displayName.trim()) saveDisplayName(displayName);
+    // Save DEL template ID to history if checkbox is on and ID is filled
+    if (includeDEL && delConfig.templateId?.trim()) {
+      saveTemplateId("DEL", delConfig.templateId.trim(), "");
+    }
     const id = woConfig.templateId.trim();
     if (!id) { setStep(s => { setJoke(JOKES[Math.floor(Math.random() * JOKES.length)]); return s + 1; }); return; }
     const existing = (templateIdHistory[woType] || []).find(e => (typeof e === "string" ? e : e.id) === id);
