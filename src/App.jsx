@@ -103,7 +103,7 @@ function buildRows(site, projectId, displayName, woType, cfg) {
         const date = addDays(site.date, d);
         const siteId = `${site.code}-${meta.siteIdSuffix}(${t})`;
         const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-        rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: `${cfg.techType} ${t}`, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed" }));
+        rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: `${cfg.techType} ${t}`, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: site.routeTo || "" }));
       }
     }
   } else {
@@ -111,7 +111,7 @@ function buildRows(site, projectId, displayName, woType, cfg) {
       const date = addDays(site.date, d);
       const siteId = `${site.code}-${meta.siteIdSuffix}`;
       const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-      rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed" }));
+      rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: site.routeTo || "" }));
     }
     if (numDays > 1) rows.push([]);
   }
@@ -127,12 +127,12 @@ const WO_HEADERS = [
   "Location Display Name","Location Name"
 ];
 
-function makeRow({ templateId, projectId, siteId, bundle, site, date, startTime, techType, budgetTech, maxBudget, payRate, approxHours, estDuration, country, locName, payType }) {
+function makeRow({ templateId, projectId, siteId, bundle, site, date, startTime, techType, budgetTech, maxBudget, payRate, approxHours, estDuration, country, locName, payType, routeTo }) {
   return [
     templateId, projectId, siteId, bundle,
     site.address, site.address2 || "", site.city, site.state, site.zip,
     country, "", date, "", startTime, "",
-    techType, "", "",
+    techType, "", routeTo || "",
     budgetTech, "", maxBudget, payRate,
     "", "", "", "", approxHours, estDuration, payType || "Fixed",
     locName, locName
@@ -163,7 +163,7 @@ function toCSV(headers, rows) {
 const EMPTY_SITE = () => ({
   code: "", branchName: "", address: "", address2: "",
   city: "", state: "", zip: "", date: "",
-  numTechs: "", numDays: "", budgetTech: "", payRate: "",
+  numTechs: "", numDays: "", budgetTech: "", payRate: "", routeTo: "",
   verified: null, verifying: false, verifyError: ""
 });
 
@@ -317,6 +317,7 @@ export default function App() {
   const [deletePw, setDeletePw] = useState("");
   const [deletePwError, setDeletePwError] = useState(false);
   const [showRecoverModal, setShowRecoverModal] = useState(false);
+  const [showRoutePanel, setShowRoutePanel] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [jobHistory, setJobHistory] = useState([]);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
@@ -352,7 +353,15 @@ export default function App() {
       .then(rows => {
         if (rows?.[0]?.data) {
           const d = rows[0].data;
-          if (d.custom) setCustomWoTypes(d.custom);
+          // Handle both nested shape { custom, deletedBuiltins, overriddenBuiltins }
+          // and old flat shape where the whole object was custom types
+          if (d.custom !== undefined) {
+            setCustomWoTypes(d.custom || {});
+          } else if (typeof d === "object" && !Array.isArray(d)) {
+            // Old flat shape — treat whole object as custom types
+            const isOldShape = Object.values(d).every(v => v && typeof v === "object" && "siteIdSuffix" in v);
+            if (isOldShape && Object.keys(d).length > 0) setCustomWoTypes(d);
+          }
           if (d.deletedBuiltins) setDeletedBuiltins(d.deletedBuiltins);
           if (d.overriddenBuiltins) setOverriddenBuiltins(d.overriddenBuiltins);
         }
@@ -407,7 +416,9 @@ export default function App() {
     sbFetch("/custom_wo_types?id=eq.1", {
       method: "PATCH", prefer: "return=minimal",
       body: JSON.stringify({ data: { custom, deletedBuiltins: deleted, overriddenBuiltins: overridden }, updated_at: new Date().toISOString() })
-    }).catch(() => {});
+    })
+      .then(r => { if (!r.ok) r.text().then(t => console.error("custom_wo_types save failed:", t)); })
+      .catch(e => console.error("custom_wo_types network error:", e));
   };
   const saveJob = (extraData = {}) => {
     const job = {
@@ -1423,7 +1434,7 @@ export default function App() {
             </div>
 
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1.1rem", marginBottom: 20 }}>
-              <div style={{ fontSize: 10, color: T.textFaint, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Sites ({sites.filter(rowComplete).length})</div>
+              <div style={{ fontSize: 10, color: T.textFaint, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Sites ({sites.filter(rowComplete).length}){sites.filter(s => rowComplete(s) && s.routeTo).length > 0 ? <span style={{ color: T.accent, marginLeft: 8 }}>· {sites.filter(s => rowComplete(s) && s.routeTo).length} pre-routed 🎯</span> : ""}</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 8 }}>
                 {sites.filter(rowComplete).map((s, i) => (
                   <div key={i} style={{ background: T.surface2, borderRadius: 6, padding: "8px 10px", borderLeft: `3px solid ${s.verified === true ? "#22c55e" : "T.border2"}` }}>
@@ -1438,6 +1449,15 @@ export default function App() {
               </div>
             </div>
 
+            {/* Route WOs button */}
+            {(() => {
+              const routedCount = sites.filter(s => rowComplete(s) && s.routeTo).length;
+              return (
+                <button onClick={() => setShowRoutePanel(true)} style={{ width: "100%", marginBottom: 10, padding: "10px", borderRadius: 10, border: `1px solid ${routedCount > 0 ? T.accent : T.border2}`, background: routedCount > 0 ? `${T.accent}18` : "transparent", color: routedCount > 0 ? T.accentHi : T.textMid, cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  🎯 {routedCount > 0 ? `ROUTE WOs  —  ${routedCount} of ${sites.filter(rowComplete).length} sites assigned` : "ROUTE WOs  —  OPTIONAL"}
+                </button>
+              );
+            })()}
             <button onClick={downloadCSV} disabled={generating} style={{ width: "100%", padding: "1rem", borderRadius: 10, border: "none", cursor: generating ? "not-allowed" : "pointer", background: generating ? T.disabledBg : `linear-gradient(135deg,${T.accent},#dc6209)`, color: generating ? T.disabledText : "#000", fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, transition: "all .2s", boxShadow: generating ? "none" : "0 4px 24px rgba(234,88,12,.35)" }}>
               {generating ? "⏳  BUILDING CSV..." : includeDEL ? `⬇  DOWNLOAD ${woType} + DEL CSVs` : `⬇  DOWNLOAD ${woType} CSV`}
             </button>
@@ -1607,6 +1627,73 @@ export default function App() {
                   ))
                 }
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Route WOs panel */}
+        {showRoutePanel && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 400, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }} onClick={() => setShowRoutePanel(false)}>
+            <div style={{ background: T.surface, borderLeft: `2px solid ${T.accent}`, height: "100%", width: "100%", maxWidth: 460, overflowY: "auto", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div style={{ padding: "1.25rem 1.5rem", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, background: T.surface, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accentHi }}>🎯 ROUTE WORK ORDERS</div>
+                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 2 }}>Enter a provider ID to pre-route a site · Leave blank to publish open</div>
+                </div>
+                <button onClick={() => setShowRoutePanel(false)} style={{ background: "transparent", border: "none", color: T.textMid, cursor: "pointer", fontSize: 20, flexShrink: 0 }}>✕</button>
+              </div>
+
+              {/* Global assign all */}
+              <div style={{ padding: "1rem 1.5rem", borderBottom: `1px solid ${T.border}`, display: "flex", gap: 8, alignItems: "flex-end" }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 5 }}>Assign all sites to one provider</label>
+                  <input
+                    id="route-global"
+                    style={{ ...T.inp, width: "100%" }}
+                    placeholder="Provider ID (e.g. 12345)"
+                    onFocus={e => e.target.style.borderColor=T.accent}
+                    onBlur={e => e.target.style.borderColor=T.border2}
+                  />
+                </div>
+                <button onClick={() => {
+                  const val = document.getElementById("route-global").value.trim();
+                  setSites(prev => prev.map(s => rowComplete(s) ? { ...s, routeTo: val } : s));
+                }} style={{ padding: "9px 16px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5, whiteSpace: "nowrap" }}>APPLY ALL</button>
+                <button onClick={() => setSites(prev => prev.map(s => ({ ...s, routeTo: "" })))} style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>Clear all</button>
+              </div>
+
+              {/* Per-site list */}
+              <div style={{ flex: 1, padding: "1rem 1.5rem", display: "flex", flexDirection: "column", gap: 10 }}>
+                {sites.filter(rowComplete).map((site, i) => {
+                  const realIdx = sites.indexOf(site);
+                  return (
+                    <div key={i} style={{ background: T.surface2, border: `1px solid ${site.routeTo ? T.accent : T.border}`, borderRadius: 10, padding: "0.85rem 1rem", display: "flex", gap: 10, alignItems: "center" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, letterSpacing: 1.5, color: site.routeTo ? T.accentHi : T.textMid, marginBottom: 2 }}>
+                          {site.code}{site.branchName ? ` — ${site.branchName}` : ""}
+                        </div>
+                        <div style={{ fontSize: 10, color: T.textFaint, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{site.city}, {site.state} · {site.numTechs || woConfig.numTechs} tech{Number(site.numTechs || woConfig.numTechs) > 1 ? "s" : ""} × {site.numDays || woConfig.numDays} day{Number(site.numDays || woConfig.numDays) > 1 ? "s" : ""}</div>
+                      </div>
+                      <input
+                        style={{ ...T.inp, width: 140, flexShrink: 0, fontSize: 12, ...(site.routeTo ? { borderColor: T.accent } : {}) }}
+                        placeholder="Provider ID"
+                        value={site.routeTo || ""}
+                        onChange={e => updateSite(realIdx, "routeTo", e.target.value)}
+                        onFocus={e => e.target.style.borderColor=T.accent}
+                        onBlur={e => e.target.style.borderColor=site.routeTo ? T.accent : T.border2}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer */}
+              <div style={{ padding: "1rem 1.5rem", borderTop: `1px solid ${T.border}`, position: "sticky", bottom: 0, background: T.surface }}>
+                <button onClick={() => setShowRoutePanel(false)} style={{ width: "100%", padding: "10px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}>DONE</button>
+              </div>
+
             </div>
           </div>
         )}
