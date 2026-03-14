@@ -103,7 +103,7 @@ function buildRows(site, projectId, displayName, woType, cfg) {
         const date = addDays(site.date, d);
         const siteId = `${site.code}-${meta.siteIdSuffix}(${t})`;
         const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-        rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: `${cfg.techType} ${t}`, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: site.routeTo || "" }));
+        rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: `${cfg.techType} ${t}`, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[t - 1] || "" }));
       }
     }
   } else {
@@ -111,7 +111,7 @@ function buildRows(site, projectId, displayName, woType, cfg) {
       const date = addDays(site.date, d);
       const siteId = `${site.code}-${meta.siteIdSuffix}`;
       const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-      rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: site.routeTo || "" }));
+      rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[0] || "" }));
     }
     if (numDays > 1) rows.push([]);
   }
@@ -163,7 +163,7 @@ function toCSV(headers, rows) {
 const EMPTY_SITE = () => ({
   code: "", branchName: "", address: "", address2: "",
   city: "", state: "", zip: "", date: "",
-  numTechs: "", numDays: "", budgetTech: "", payRate: "", routeTo: "",
+  numTechs: "", numDays: "", budgetTech: "", payRate: "", routeToTechs: [],
   verified: null, verifying: false, verifyError: ""
 });
 
@@ -1434,7 +1434,7 @@ export default function App() {
             </div>
 
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1.1rem", marginBottom: 20 }}>
-              <div style={{ fontSize: 10, color: T.textFaint, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Sites ({sites.filter(rowComplete).length}){sites.filter(s => rowComplete(s) && s.routeTo).length > 0 ? <span style={{ color: T.accent, marginLeft: 8 }}>· {sites.filter(s => rowComplete(s) && s.routeTo).length} pre-routed 🎯</span> : ""}</div>
+              <div style={{ fontSize: 10, color: T.textFaint, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Sites ({sites.filter(rowComplete).length}){sites.filter(s => rowComplete(s) && (s.routeToTechs||[]).some(Boolean)).length > 0 ? <span style={{ color: T.accent, marginLeft: 8 }}>· {sites.filter(s => rowComplete(s) && (s.routeToTechs||[]).some(Boolean)).length} pre-routed 🎯</span> : ""}</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 8 }}>
                 {sites.filter(rowComplete).map((s, i) => (
                   <div key={i} style={{ background: T.surface2, borderRadius: 6, padding: "8px 10px", borderLeft: `3px solid ${s.verified === true ? "#22c55e" : "T.border2"}` }}>
@@ -1451,7 +1451,7 @@ export default function App() {
 
             {/* Route WOs button */}
             {(() => {
-              const routedCount = sites.filter(s => rowComplete(s) && s.routeTo).length;
+              const routedCount = sites.filter(s => rowComplete(s) && (s.routeToTechs || []).some(Boolean)).length;
               return (
                 <button onClick={() => setShowRoutePanel(true)} style={{ width: "100%", marginBottom: 10, padding: "10px", borderRadius: 10, border: `1px solid ${routedCount > 0 ? T.accent : T.border2}`, background: routedCount > 0 ? `${T.accent}18` : "transparent", color: routedCount > 0 ? T.accentHi : T.textMid, cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                   🎯 {routedCount > 0 ? `ROUTE WOs  —  ${routedCount} of ${sites.filter(rowComplete).length} sites assigned` : "ROUTE WOs  —  OPTIONAL"}
@@ -1645,10 +1645,10 @@ export default function App() {
                 <button onClick={() => setShowRoutePanel(false)} style={{ background: "transparent", border: "none", color: T.textMid, cursor: "pointer", fontSize: 20, flexShrink: 0 }}>✕</button>
               </div>
 
-              {/* Global assign all */}
+              {/* Global assign all techs to one provider */}
               <div style={{ padding: "1rem 1.5rem", borderBottom: `1px solid ${T.border}`, display: "flex", gap: 8, alignItems: "flex-end" }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 5 }}>Assign all sites to one provider</label>
+                  <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 5 }}>Assign ALL tech slots across all sites</label>
                   <input
                     id="route-global"
                     style={{ ...T.inp, width: "100%" }}
@@ -1659,31 +1659,57 @@ export default function App() {
                 </div>
                 <button onClick={() => {
                   const val = document.getElementById("route-global").value.trim();
-                  setSites(prev => prev.map(s => rowComplete(s) ? { ...s, routeTo: val } : s));
+                  setSites(prev => prev.map(s => {
+                    if (!rowComplete(s)) return s;
+                    const n = Number(s.numTechs || woConfig.numTechs) || 1;
+                    return { ...s, routeToTechs: Array(n).fill(val) };
+                  }));
                 }} style={{ padding: "9px 16px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5, whiteSpace: "nowrap" }}>APPLY ALL</button>
-                <button onClick={() => setSites(prev => prev.map(s => ({ ...s, routeTo: "" })))} style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>Clear all</button>
+                <button onClick={() => setSites(prev => prev.map(s => ({ ...s, routeToTechs: [] })))} style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>Clear all</button>
               </div>
 
-              {/* Per-site list */}
-              <div style={{ flex: 1, padding: "1rem 1.5rem", display: "flex", flexDirection: "column", gap: 10 }}>
+              {/* Per-site, per-tech list */}
+              <div style={{ flex: 1, padding: "1rem 1.5rem", display: "flex", flexDirection: "column", gap: 12 }}>
                 {sites.filter(rowComplete).map((site, i) => {
                   const realIdx = sites.indexOf(site);
+                  const numTechs = Number(site.numTechs || woConfig.numTechs) || 1;
+                  const techSlots = Array.from({ length: numTechs }, (_, ti) => (site.routeToTechs || [])[ti] || "");
+                  const anyRouted = techSlots.some(Boolean);
                   return (
-                    <div key={i} style={{ background: T.surface2, border: `1px solid ${site.routeTo ? T.accent : T.border}`, borderRadius: 10, padding: "0.85rem 1rem", display: "flex", gap: 10, alignItems: "center" }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, letterSpacing: 1.5, color: site.routeTo ? T.accentHi : T.textMid, marginBottom: 2 }}>
-                          {site.code}{site.branchName ? ` — ${site.branchName}` : ""}
+                    <div key={i} style={{ background: T.surface2, border: `1px solid ${anyRouted ? T.accent : T.border}`, borderRadius: 10, padding: "0.85rem 1rem" }}>
+                      {/* Site header */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                        <div>
+                          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, letterSpacing: 1.5, color: anyRouted ? T.accentHi : T.textMid }}>
+                            {site.code}{site.branchName ? ` — ${site.branchName}` : ""}
+                          </div>
+                          <div style={{ fontSize: 10, color: T.textFaint, marginTop: 1 }}>{site.city}, {site.state} · {numTechs} tech{numTechs > 1 ? "s" : ""} × {site.numDays || woConfig.numDays} day{Number(site.numDays || woConfig.numDays) > 1 ? "s" : ""}</div>
                         </div>
-                        <div style={{ fontSize: 10, color: T.textFaint, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{site.city}, {site.state} · {site.numTechs || woConfig.numTechs} tech{Number(site.numTechs || woConfig.numTechs) > 1 ? "s" : ""} × {site.numDays || woConfig.numDays} day{Number(site.numDays || woConfig.numDays) > 1 ? "s" : ""}</div>
+                        {anyRouted && (
+                          <button onClick={() => setSites(prev => prev.map((s, idx) => idx === realIdx ? { ...s, routeToTechs: [] } : s))}
+                            style={{ background: "transparent", border: "none", color: T.textFaint, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>clear</button>
+                        )}
                       </div>
-                      <input
-                        style={{ ...T.inp, width: 140, flexShrink: 0, fontSize: 12, ...(site.routeTo ? { borderColor: T.accent } : {}) }}
-                        placeholder="Provider ID"
-                        value={site.routeTo || ""}
-                        onChange={e => updateSite(realIdx, "routeTo", e.target.value)}
-                        onFocus={e => e.target.style.borderColor=T.accent}
-                        onBlur={e => e.target.style.borderColor=site.routeTo ? T.accent : T.border2}
-                      />
+                      {/* One input per tech slot */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {techSlots.map((val, ti) => (
+                          <div key={ti} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ fontSize: 10, color: T.textFaint, width: 52, flexShrink: 0 }}>Tech {ti + 1}</div>
+                            <input
+                              style={{ ...T.inp, flex: 1, fontSize: 12, ...(val ? { borderColor: T.accent } : {}) }}
+                              placeholder="Provider ID (blank = open)"
+                              value={val}
+                              onChange={e => {
+                                const updated = [...techSlots];
+                                updated[ti] = e.target.value;
+                                setSites(prev => prev.map((s, idx) => idx === realIdx ? { ...s, routeToTechs: updated } : s));
+                              }}
+                              onFocus={e => e.target.style.borderColor=T.accent}
+                              onBlur={e => e.target.style.borderColor=val ? T.accent : T.border2}
+                            />
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   );
                 })}
