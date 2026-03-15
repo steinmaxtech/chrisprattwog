@@ -598,7 +598,32 @@ export default function App() {
   const parsePaste = () => {
     setPasteError("");
     if (!pasteText.trim()) { setPasteError("Nothing pasted yet."); return; }
-    const rawLines = pasteText.trim().split("\n").filter(l => l.trim());
+
+    // Pre-process: collapse quoted multiline fields into single lines
+    // Handles the services sheet format where a quoted field spans multiple lines
+    const collapseQuotedLines = (raw) => {
+      const result = [];
+      let current = "";
+      let inQuote = false;
+      for (const ch of raw) {
+        if (ch === '"') {
+          inQuote = !inQuote;
+          current += ch;
+        } else if (ch === "\n" && inQuote) {
+          // Inside a quoted field — replace newline with space to collapse
+          current += " ";
+        } else if (ch === "\n" && !inQuote) {
+          result.push(current);
+          current = "";
+        } else {
+          current += ch;
+        }
+      }
+      if (current.trim()) result.push(current);
+      return result;
+    };
+
+    const rawLines = collapseQuotedLines(pasteText.trim()).filter(l => l.trim());
     if (rawLines.length === 0) { setPasteError("No data rows found."); return; }
 
     const siteDefaults = {
@@ -614,7 +639,7 @@ export default function App() {
 
     // Detect delimiter: if first line has tabs use tab, else comma
     const delim = rawLines[0].includes("\t") ? "\t" : ",";
-    const lines = rawLines.map(l => l.split(delim).map(c => c.trim()));
+    const lines = rawLines.map(l => l.split(delim).map(c => c.replace(/^"|"$/g, "").trim()));
 
     const firstRow = lines[0].map(h => h.toLowerCase().replace(/[^a-z]/g, ""));
     const isBuildingFormat = firstRow.some(h => h === "buildingcode" || h === "buildingname");
@@ -622,17 +647,39 @@ export default function App() {
     const isHeaderRow = (row) => {
       if (!row.length) return false;
       const first = (row[0] || "").trim().toLowerCase();
-      // Looks like a building code (e.g. FB01, ABC123) — definitely data
       if (/^[a-z]{1,4}\d/.test(first)) return false;
-      // All cells are word-like labels with no digits
       const labelLike = row.filter(h => h.trim()).every(h => /^[a-zA-Z\s]+$/.test(h.trim()));
       const hasKnownLabel = row.some(h => HEADER_WORDS.includes(h.trim().toLowerCase()));
       return labelLike && hasKnownLabel;
     };
 
+    // Detect Format 4: services sheet
+    // Pattern: code(0) | branchName(1) | services quoted(2) | quarter(3) | region(4) | address(5) | city(6) | state(7) | zip(8) | fullAddr(9) | status(10)
+    // Key signal: 10+ tab cols AND col[3] matches quarter pattern like "1H2026" or col[10] is "Scheduled"
+    const isServicesFormat = delim === "\t" && lines.length > 0 && (() => {
+      const sample = lines[0];
+      const hasQuarter = sample.some(c => /^\d[HhSs]\d{4}$/.test(c));
+      const hasScheduled = sample.some(c => /^scheduled$/i.test(c));
+      return (hasQuarter || hasScheduled) && sample.length >= 8;
+    })();
+
     let parsed;
 
-    if (isBuildingFormat) {
+    if (isServicesFormat) {
+      // Format 4 (services sheet): code | branchName | services | quarter | region | address | city | state | zip | fullAddr | status
+      const dataLines = isHeaderRow(lines[0]) ? lines.slice(1) : lines;
+      parsed = dataLines.map(cols => ({
+        code:       cols[0] || "",
+        branchName: cols[1] || "",
+        address:    cols[5] || "",
+        address2:   "",
+        city:       cols[6] || "",
+        state:      cols[7] || "",
+        zip:        cols[8] || "",
+        date:       parseDate(""),
+        ...siteDefaults
+      }));
+    } else if (isBuildingFormat) {
       // Format 2 (tab, with headers): buildingcode, buildingname, address, city, state, zip
       const headers = firstRow;
       const idx = (name) => headers.findIndex(h => h === name || h.includes(name));
