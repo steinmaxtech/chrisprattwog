@@ -825,7 +825,7 @@ export default function App() {
         const delRows = [];
         for (const site of sites) {
           if (!site.address && !site.code) continue;
-          const siteDay1 = { ...site, numTechs: "1", numDays: "1", budgetTech: "", payRate: "" };
+          const siteDay1 = { ...site, numTechs: "1", numDays: "1", budgetTech: "", payRate: "", ...(delCfg.date ? { date: delCfg.date } : {}) };
           delRows.push(...buildRows(siteDay1, projectId, displayName, "DEL", delCfg, ALL_WO_TYPES));
         }
         if (delRows.length && delRows[delRows.length-1].length === 0) delRows.pop();
@@ -1266,22 +1266,25 @@ export default function App() {
                           {/* Remaining DEL config fields */}
                           {[
                             { key: "startTime",   label: "Scheduled Start Time", ph: "13:00:00" },
+                            { key: "date",        label: "Override Date",        ph: "", type: "date" },
                             { key: "techType",    label: "Tech Type",            ph: "Tech 1" },
                             { key: "budgetTech",  label: "Budget (Tech) $",      ph: "200" },
                             { key: "payRate",     label: "Pay Rate $",           ph: "150" },
                             { key: "approxHours", label: "Est. Hours",           ph: "3" },
                             { key: "country",     label: "Country",              ph: "" },
-                          ].map(({ key, label, ph }) => (
+                          ].map(({ key, label, ph, type }) => (
                             <div key={key}>
                               <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>{label}</label>
                               <input
                                 style={T.inp}
+                                type={type || "text"}
                                 placeholder={ph}
                                 value={delConfig[key] || ""}
                                 onChange={e => setDelConfig(prev => ({ ...prev, [key]: e.target.value }))}
                                 onFocus={e => e.target.style.borderColor=T.accent}
                                 onBlur={e => e.target.style.borderColor=T.border2}
                               />
+                              {key === "date" && <div style={{ fontSize: 10, color: T.textFaint, marginTop: 3 }}>Leave blank to use each site's Day 1 date</div>}
                             </div>
                           ))}
                           {/* DEL Pay Type toggle */}
