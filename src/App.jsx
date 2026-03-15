@@ -1563,6 +1563,12 @@ export default function App() {
                 <span style={{ color: T.textDim }}>Total data rows</span>
 <span style={{ color: T.text, fontWeight: 600 }}>{totalRows}{delRows > 0 ? ` + ${delRows} DEL` : ""}{brkRows > 0 ? ` + ${brkRows} BRK` : ""}</span>
               </div>
+              {includeDEL && delConfig.date && (
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, paddingTop: 6 }}>
+                  <span style={{ color: T.textDim }}>DEL date override</span>
+                  <span style={{ color: T.accent, fontWeight: 600 }}>📅 {delConfig.date} <span style={{ color: T.textFaint, fontWeight: 400 }}>(all sites)</span></span>
+                </div>
+              )}
             </div>
 
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1.1rem", marginBottom: 20 }}>
