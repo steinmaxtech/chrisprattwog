@@ -251,6 +251,8 @@ export default function App() {
   const [startOverConfirm, setStartOverConfirm] = useState(false);
   const [delConfig, setDelConfig] = useState(() => _s?.delConfig ?? { ...WO_DEFAULTS["DEL"] });
   const [includeDEL, setIncludeDEL] = useState(() => _s?.includeDEL ?? false);
+  const [brkConfig, setBrkConfig] = useState(() => _s?.brkConfig ?? { ...WO_DEFAULTS["BRK"] });
+  const [includeBRK, setIncludeBRK] = useState(() => _s?.includeBRK ?? false);
   const [importMode, setImportMode] = useState(false);
   const fileInputRef = useRef(null);
   const inputRefs = useRef({});
@@ -281,7 +283,7 @@ export default function App() {
 
   // Persist work state to session on every relevant change
   useEffect(() => {
-    if (authed) saveSession({ step, projectId, displayName, woType, woConfig, sites, delConfig, includeDEL });
+    if (authed) saveSession({ step, projectId, displayName, woType, woConfig, sites, delConfig, includeDEL, brkConfig, includeBRK });
   }, [step, projectId, displayName, woType, woConfig, sites, authed]);
 
   // Persist dark mode preference
@@ -307,6 +309,7 @@ export default function App() {
   const [templateIdHistory, setTemplateIdHistory] = useState({});   // { LVL: [{id, label}, ...], ... }
   const [showTidDropdown, setShowTidDropdown] = useState(false);
   const [showDelTidDropdown, setShowDelTidDropdown] = useState(false);
+  const [showBrkTidDropdown, setShowBrkTidDropdown] = useState(false);
   const [customWoTypes, setCustomWoTypes] = useState({});
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [editingCustomKey, setEditingCustomKey] = useState(null);
@@ -428,6 +431,8 @@ export default function App() {
       wo_config:    woConfig,
       del_config:   includeDEL ? delConfig : null,
       include_del:  includeDEL,
+      brk_config:   includeBRK ? brkConfig : null,
+      include_brk:  includeBRK,
       sites:        sites.filter(s => s.code || s.address),
       site_count:   sites.filter(rowComplete).length,
       created_at:   new Date().toISOString(),
@@ -469,6 +474,9 @@ export default function App() {
     // Save DEL template ID to history if checkbox is on and ID is filled
     if (includeDEL && delConfig.templateId?.trim()) {
       saveTemplateId("DEL", delConfig.templateId.trim(), "");
+    }
+    if (includeBRK && brkConfig.templateId?.trim()) {
+      saveTemplateId("BRK", brkConfig.templateId.trim(), "");
     }
     const id = woConfig.templateId.trim();
     if (!id) { setStep(s => { setJoke(JOKES[Math.floor(Math.random() * JOKES.length)]); return s + 1; }); return; }
@@ -828,6 +836,24 @@ export default function App() {
           setTimeout(() => { triggerDownload(delCsvContent, delFilename); }, 500);
         }
       }
+      // BRK CSV when checkbox is checked
+      if (includeBRK) {
+        const brkCfg = { ...brkConfig };
+        if (brkCfg.templateId) saveTemplateId("BRK", brkCfg.templateId, "");
+        const brkRows = [];
+        for (const site of sites) {
+          if (!site.address && !site.code) continue;
+          const siteDay1 = { ...site, numTechs: "1", numDays: "1", budgetTech: "", payRate: "" };
+          brkRows.push(...buildRows(siteDay1, projectId, displayName, "BRK", brkCfg, ALL_WO_TYPES));
+        }
+        if (brkRows.length && brkRows[brkRows.length-1].length === 0) brkRows.pop();
+        if (brkRows.length) {
+          const brkFilename = `FieldNation_BRK_${safeProject}_${datePart}_${timePart}.csv`;
+          const brkCsvContent = toCSV(WO_HEADERS, brkRows);
+          csvFiles.push({ filename: brkFilename, content: brkCsvContent });
+          setTimeout(() => { triggerDownload(brkCsvContent, brkFilename); }, includeDEL ? 1000 : 500);
+        }
+      }
       // Compress CSV content before storing in Supabase
       const compressedFiles = await Promise.all(
         csvFiles.map(async f => ({
@@ -841,11 +867,12 @@ export default function App() {
       alert("Error: " + err.message);
     }
     setGenerating(false);
-  }, [sites, projectId, displayName, woType, woConfig, includeDEL, delConfig]);
+  }, [sites, projectId, displayName, woType, woConfig, includeDEL, delConfig, includeBRK, brkConfig]);
 
 
   const totalRows = sites.filter(rowComplete).reduce((sum, site) => sum + buildRows(site, projectId, displayName, woType, woConfig, ALL_WO_TYPES).filter(r => r.length > 0).length, 0);
   const delRows = includeDEL ? sites.filter(rowComplete).length : 0;
+  const brkRows = includeBRK ? sites.filter(rowComplete).length : 0;
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -1133,6 +1160,61 @@ export default function App() {
                   &nbsp;·&nbsp; Pay Type: <span style={{ color: T.textMid }}>{woConfig.payType || "Fixed"}</span>
                 </div>
                 <>
+                    {/* BRK checkbox + config */}
+                    <div style={{ marginTop: 10, padding: "10px 14px", background: T.surface2, borderRadius: 7, border: `1px solid ${includeBRK ? T.accent : T.border}`, display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setIncludeBRK(d => !d)}>
+                      <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${includeBRK ? T.accent : T.border2}`, background: includeBRK ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {includeBRK && <span style={{ color: "#000", fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 12, color: includeBRK ? T.text : T.textMid, fontWeight: 600 }}>Also generate BRK (Backboard) work order on Day 1</div>
+                        <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>Creates 1 BRK WO per site on Day 1 · configure below when enabled</div>
+                      </div>
+                    </div>
+                    {includeBRK && (
+                      <div style={{ marginTop: 10, background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1rem" }}>
+                        <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>BRK Work Order Config</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                          <div style={{ position: "relative" }}>
+                            <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Template ID</label>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <input style={{ ...T.inp, flex: 1 }} placeholder="102222" value={brkConfig.templateId || ""} onChange={e => setBrkConfig(prev => ({ ...prev, templateId: e.target.value }))} onFocus={e => { e.target.style.borderColor=T.accent; }} onBlur={e => { e.target.style.borderColor=T.border2; setTimeout(() => setShowBrkTidDropdown(false), 150); }} />
+                              {(templateIdHistory["BRK"]?.length > 0) && (
+                                <button onClick={() => setShowBrkTidDropdown(d => !d)} style={{ background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "0 10px", color: T.textMid, cursor: "pointer", fontSize: 13, flexShrink: 0 }} title="Recent BRK template IDs">▾</button>
+                              )}
+                            </div>
+                            {showBrkTidDropdown && templateIdHistory["BRK"]?.length > 0 && (
+                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 7, zIndex: 100, marginTop: 3, overflow: "hidden" }}>
+                                {templateIdHistory["BRK"].map((entry) => {
+                                  const tid = typeof entry === "string" ? entry : entry.id;
+                                  const lbl = typeof entry === "string" ? "" : entry.label;
+                                  return (
+                                    <div key={tid} onClick={() => { setBrkConfig(prev => ({ ...prev, templateId: tid })); setShowBrkTidDropdown(false); }} style={{ padding: "8px 12px", cursor: "pointer", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }} onMouseEnter={e => e.currentTarget.style.background=T.rowHover} onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                                      <span style={{ fontSize: 12, color: T.text, fontWeight: 600 }}>{tid}</span>
+                                      {lbl && <span style={{ fontSize: 11, color: T.textDim, marginLeft: 8 }}>{lbl}</span>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                          {[{ key: "startTime", label: "Scheduled Start Time", ph: "13:00:00" }, { key: "techType", label: "Tech Type", ph: "Tech 1" }, { key: "budgetTech", label: "Budget (Tech) $", ph: "200" }, { key: "payRate", label: "Pay Rate $", ph: "150" }, { key: "approxHours", label: "Est. Hours", ph: "3" }, { key: "country", label: "Country", ph: "" }].map(({ key, label, ph }) => (
+                            <div key={key}>
+                              <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>{label}</label>
+                              <input style={T.inp} placeholder={ph} value={brkConfig[key] || ""} onChange={e => setBrkConfig(prev => ({ ...prev, [key]: e.target.value }))} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => e.target.style.borderColor=T.border2} />
+                            </div>
+                          ))}
+                          <div style={{ gridColumn: "span 2" }}>
+                            <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>Pay Type</label>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              {["Fixed", "Hourly"].map(pt => (
+                                <button key={pt} onClick={() => setBrkConfig(prev => ({ ...prev, payType: pt }))} style={{ flex: 1, padding: "8px", borderRadius: 8, border: `2px solid ${(brkConfig.payType || "Fixed") === pt ? T.accent : T.border2}`, background: (brkConfig.payType || "Fixed") === pt ? `${T.accent}22` : "transparent", color: (brkConfig.payType || "Fixed") === pt ? T.accentHi : T.textMid, cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, transition: "all .15s" }}>{pt}</button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {/* DEL checkbox + config */}
                     <div style={{ marginTop: 10, padding: "10px 14px", background: T.surface2, borderRadius: 7, border: `1px solid ${includeDEL ? T.accent : T.border}`, display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setIncludeDEL(d => !d)}>
                       <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${includeDEL ? T.accent : T.border2}`, background: includeDEL ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         {includeDEL && <span style={{ color: "#000", fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>}
@@ -1429,7 +1511,7 @@ export default function App() {
               })()}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, paddingTop: 8 }}>
                 <span style={{ color: T.textDim }}>Total data rows</span>
-<span style={{ color: T.text, fontWeight: 600 }}>{totalRows}{delRows > 0 ? ` + ${delRows} DEL` : ""}</span>
+<span style={{ color: T.text, fontWeight: 600 }}>{totalRows}{delRows > 0 ? ` + ${delRows} DEL` : ""}{brkRows > 0 ? ` + ${brkRows} BRK` : ""}</span>
               </div>
             </div>
 
@@ -1459,7 +1541,7 @@ export default function App() {
               );
             })()}
             <button onClick={downloadCSV} disabled={generating} style={{ width: "100%", padding: "1rem", borderRadius: 10, border: "none", cursor: generating ? "not-allowed" : "pointer", background: generating ? T.disabledBg : `linear-gradient(135deg,${T.accent},#dc6209)`, color: generating ? T.disabledText : "#000", fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, transition: "all .2s", boxShadow: generating ? "none" : "0 4px 24px rgba(234,88,12,.35)" }}>
-              {generating ? "⏳  BUILDING CSV..." : includeDEL ? `⬇  DOWNLOAD ${woType} + DEL CSVs` : `⬇  DOWNLOAD ${woType} CSV`}
+              {generating ? "⏳  BUILDING CSV..." : (includeDEL || includeBRK) ? `⬇  DOWNLOAD ${woType}${includeDEL ? " + DEL" : ""}${includeBRK ? " + BRK" : ""} CSVs` : `⬇  DOWNLOAD ${woType} CSV`}
             </button>
             <div style={{ fontSize: 11, color: T.textFaint, textAlign: "center", marginTop: 8 }}>
               Single CSV file · Ready to upload directly to FieldNation
@@ -1582,6 +1664,7 @@ export default function App() {
                         {job.wo_config?.defaultDate && <> · Date <span style={{ color: T.textMid }}>{job.wo_config.defaultDate}</span></>}
                         {job.wo_config?.payType && <> · <span style={{ color: T.textMid }}>{job.wo_config.payType}</span></>}
                         {job.include_del && <> · <span style={{ color: T.accent }}>+ DEL</span></>}
+                        {job.include_brk && <> · <span style={{ color: T.accent }}>+ BRK</span></>}
                       </div>
                       {/* Re-download stored CSVs */}
                       {Array.isArray(job.csv_files) && job.csv_files.length > 0 && (
@@ -1608,6 +1691,7 @@ export default function App() {
                           setWoType(job.wo_type || "LVL");
                           setWoConfig(job.wo_config || { ...BLANK_CFG });
                           if (job.include_del && job.del_config) { setIncludeDEL(true); setDelConfig(job.del_config); } else { setIncludeDEL(false); }
+                          if (job.include_brk && job.brk_config) { setIncludeBRK(true); setBrkConfig(job.brk_config); } else { setIncludeBRK(false); }
                           if (Array.isArray(job.sites) && job.sites.length) setSites(job.sites);
                           setStep(0);
                           setShowHistoryPanel(false);
@@ -1618,6 +1702,7 @@ export default function App() {
                           setWoType(job.wo_type || "LVL");
                           setWoConfig(job.wo_config || { ...BLANK_CFG });
                           if (job.include_del && job.del_config) { setIncludeDEL(true); setDelConfig(job.del_config); } else { setIncludeDEL(false); }
+                          if (job.include_brk && job.brk_config) { setIncludeBRK(true); setBrkConfig(job.brk_config); } else { setIncludeBRK(false); }
                           setSites([{ ...EMPTY_SITE(), date: (job.wo_config || {}).defaultDate || "", numTechs: (job.wo_config || {}).numTechs || "1", numDays: (job.wo_config || {}).numDays || "1" }]);
                           setStep(0);
                           setShowHistoryPanel(false);
