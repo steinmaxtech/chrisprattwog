@@ -660,20 +660,24 @@ export default function App() {
       return labelLike && hasKnownLabel;
     };
 
-    // Detect Format 4: services sheet
-    // Pattern: code(0) | branchName(1) | services quoted(2) | quarter(3) | region(4) | address(5) | city(6) | state(7) | zip(8) | fullAddr(9) | status(10)
-    // Key signal: 10+ tab cols AND col[3] matches quarter pattern like "1H2026" or col[10] is "Scheduled"
-    const isServicesFormat = delim === "\t" && lines.length > 0 && (() => {
+    // Detect Format 4 / Format 5: services sheet variants
+    // Format 4: code(0) | branchName(1) | services(2) | quarter(3) | region(4) | address(5) | city(6) | state(7) | zip(8) | fullAddr(9) | status(10) | date(11)
+    // Format 5: code(0) | branchName(1) | quarter(2) | region(3) | address(4) | city(5) | state(6) | zip(7) | fullAddr(8) | bool(9) | status(10) | date(11)
+    // Both share: tab-delimited, 8+ cols, has quarter pattern or "Scheduled"
+    const isServicesFamily = delim === "\t" && lines.length > 0 && (() => {
       const sample = lines[0];
       const hasQuarter = sample.some(c => /^\d[HhSs]\d{4}$/.test(c));
       const hasScheduled = sample.some(c => /^scheduled$/i.test(c));
       return (hasQuarter || hasScheduled) && sample.length >= 8;
     })();
+    // Distinguish: Format 5 has quarter at col 2, Format 4 has services text at col 2
+    const isFormat5 = isServicesFamily && /^\d[HhSs]\d{4}$/.test((lines[0] || [])[2] || "");
+    const isServicesFormat = isServicesFamily && !isFormat5;
 
     let parsed;
 
     if (isServicesFormat) {
-      // Format 4 (services sheet): code | branchName | services | quarter | region | address | city | state | zip | fullAddr | status | date
+      // Format 4: code | branchName | services | quarter | region | address | city | state | zip | fullAddr | status | date
       const dataLines = isHeaderRow(lines[0]) ? lines.slice(1) : lines;
       parsed = dataLines.map(cols => ({
         code:       cols[0] || "",
@@ -683,6 +687,20 @@ export default function App() {
         city:       cols[6] || "",
         state:      cols[7] || "",
         zip:        cols[8] || "",
+        date:       parseDate(cols[11] || ""),
+        ...siteDefaults
+      }));
+    } else if (isFormat5) {
+      // Format 5: code | branchName | quarter | region | address | city | state | zip | fullAddr | bool | status | date
+      const dataLines = isHeaderRow(lines[0]) ? lines.slice(1) : lines;
+      parsed = dataLines.map(cols => ({
+        code:       cols[0] || "",
+        branchName: cols[1] || "",
+        address:    cols[4] || "",
+        address2:   "",
+        city:       cols[5] || "",
+        state:      cols[6] || "",
+        zip:        cols[7] || "",
         date:       parseDate(cols[11] || ""),
         ...siteDefaults
       }));
