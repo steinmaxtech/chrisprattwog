@@ -632,9 +632,16 @@ export default function App() {
       verified: null, verifying: false, verifyError: ""
     };
     const parseDate = (raw) => {
-      if (!raw) return woConfig.defaultDate || "";
-      const d = new Date(raw);
-      return !isNaN(d) ? d.toISOString().split("T")[0] : raw;
+      if (!raw || !raw.trim()) return woConfig.defaultDate || "";
+      // MM/DD/YY or MM/DD/YYYY
+      const mdyMatch = raw.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+      if (mdyMatch) {
+        let [, m, d, y] = mdyMatch;
+        if (y.length === 2) y = "20" + y;
+        return `${y}-${m.padStart(2,"0")}-${d.padStart(2,"0")}`;
+      }
+      const dt = new Date(raw);
+      return !isNaN(dt) ? dt.toISOString().split("T")[0] : (woConfig.defaultDate || "");
     };
 
     // Detect delimiter: if first line has tabs use tab, else comma
@@ -666,7 +673,7 @@ export default function App() {
     let parsed;
 
     if (isServicesFormat) {
-      // Format 4 (services sheet): code | branchName | services | quarter | region | address | city | state | zip | fullAddr | status
+      // Format 4 (services sheet): code | branchName | services | quarter | region | address | city | state | zip | fullAddr | status | date
       const dataLines = isHeaderRow(lines[0]) ? lines.slice(1) : lines;
       parsed = dataLines.map(cols => ({
         code:       cols[0] || "",
@@ -676,7 +683,7 @@ export default function App() {
         city:       cols[6] || "",
         state:      cols[7] || "",
         zip:        cols[8] || "",
-        date:       parseDate(""),
+        date:       parseDate(cols[11] || ""),
         ...siteDefaults
       }));
     } else if (isBuildingFormat) {
