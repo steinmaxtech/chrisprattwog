@@ -443,9 +443,12 @@ export default function App() {
       prefer: "return=representation",
       body: JSON.stringify(job)
     })
-      .then(r => r.ok ? r.json() : null)
+      .then(r => {
+        if (!r.ok) { r.text().then(t => console.error("saveJob failed:", r.status, t)); return null; }
+        return r.json();
+      })
       .then(rows => { if (rows?.[0]) setJobHistory(prev => [rows[0], ...prev].slice(0, 100)); })
-      .catch(() => {});
+      .catch(e => console.error("saveJob network error:", e));
   };
 
   const saveCustomWoTypes = (next, deleted = deletedBuiltins, overridden = overriddenBuiltins) => {
@@ -679,31 +682,54 @@ export default function App() {
     if (isServicesFormat) {
       // Format 4: code | branchName | services | quarter | region | address | city | state | zip | fullAddr | status | date
       const dataLines = isHeaderRow(lines[0]) ? lines.slice(1) : lines;
-      parsed = dataLines.map(cols => ({
-        code:       cols[0] || "",
-        branchName: cols[1] || "",
-        address:    cols[5] || "",
-        address2:   "",
-        city:       cols[6] || "",
-        state:      cols[7] || "",
-        zip:        cols[8] || "",
-        date:       parseDate(cols[11] || ""),
-        ...siteDefaults
-      }));
+      parsed = dataLines.map(cols => {
+        let address = cols[5] || "";
+        let city    = cols[6] || "";
+        let state   = cols[7] || "";
+        let zip     = cols[8] || "";
+        let date    = parseDate(cols[11] || "");
+        if (!/^\d{5}(-\d{4})?$/.test(zip)) {
+          for (let ci = 5; ci < cols.length; ci++) {
+            if (/^\d{5}(-\d{4})?$/.test(cols[ci])) {
+              zip     = cols[ci];
+              state   = cols[ci - 1] || state;
+              city    = cols[ci - 2] || city;
+              address = cols[ci - 3] || address;
+              const lastDateCol = [...cols].reverse().find(c => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(c));
+              if (lastDateCol) date = parseDate(lastDateCol);
+              break;
+            }
+          }
+        }
+        return { code: cols[0] || "", branchName: cols[1] || "", address, address2: "", city, state, zip, date, ...siteDefaults };
+      });
     } else if (isFormat5) {
       // Format 5: code | branchName | quarter | region | address | city | state | zip | fullAddr | bool | status | date
       const dataLines = isHeaderRow(lines[0]) ? lines.slice(1) : lines;
-      parsed = dataLines.map(cols => ({
-        code:       cols[0] || "",
-        branchName: cols[1] || "",
-        address:    cols[4] || "",
-        address2:   "",
-        city:       cols[5] || "",
-        state:      cols[6] || "",
-        zip:        cols[7] || "",
-        date:       parseDate(cols[11] || ""),
-        ...siteDefaults
-      }));
+      parsed = dataLines.map(cols => {
+        // Fixed col positions
+        let address = cols[4] || "";
+        let city    = cols[5] || "";
+        let state   = cols[6] || "";
+        let zip     = cols[7] || "";
+        let date    = parseDate(cols[11] || "");
+        // Safety check: if zip looks wrong (not a zip code), scan all cols for a 5-digit zip
+        if (!/^\d{5}(-\d{4})?$/.test(zip)) {
+          for (let ci = 4; ci < cols.length; ci++) {
+            if (/^\d{5}(-\d{4})?$/.test(cols[ci])) {
+              zip     = cols[ci];
+              state   = cols[ci - 1] || state;
+              city    = cols[ci - 2] || city;
+              address = cols[ci - 3] || address;
+              // Date is last non-empty col that looks like a date
+              const lastDateCol = [...cols].reverse().find(c => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(c));
+              if (lastDateCol) date = parseDate(lastDateCol);
+              break;
+            }
+          }
+        }
+        return { code: cols[0] || "", branchName: cols[1] || "", address, address2: "", city, state, zip, date, ...siteDefaults };
+      });
     } else if (isBuildingFormat) {
       // Format 2 (tab, with headers): buildingcode, buildingname, address, city, state, zip
       const headers = firstRow;
