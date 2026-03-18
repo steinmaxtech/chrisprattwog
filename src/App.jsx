@@ -84,9 +84,9 @@ const WO_DEFAULTS = {
 };
 
 // Build rows using live woConfig values
-function buildRows(site, projectId, displayName, woType, cfg) {
+function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
   const locPrefix = displayName.trim() || projectId;
-  const meta = WO_TYPES[woType];
+  const meta = (allTypes || {})[woType] || WO_TYPES[woType] || { siteIdSuffix: woType, numTechs: 1, numDays: 1, useBundle: false };
   const rows = [];
   const tId = Number(cfg.templateId);
   const cfgBudget = Number(cfg.budgetTech);
