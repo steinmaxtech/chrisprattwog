@@ -444,6 +444,7 @@ export default function App() {
       body: JSON.stringify(job)
     })
       .then(r => {
+        console.log("job_history POST status:", r.status);
         if (!r.ok) { r.text().then(t => console.error("saveJob failed:", r.status, t)); return null; }
         return r.json();
       })
@@ -787,22 +788,36 @@ export default function App() {
       });
     } else {
       const dataLines = isHeaderRow(lines[0]) ? lines.slice(1) : lines;
-      // Detect compact 6-col tab format (code, name, address, city, state, zip)
+      // Format 6 detection first (bool at col 2) — can be 7, 8, or 11 cols
+      const isFormat6 = /^(true|false)$/i.test((dataLines[0] || [])[2] || "");
+      // Detect compact tab format (code, name, address, city, state[, zip]) — 6-7 cols
       // vs original SiteList (12+ cols with address at col 4)
-      const isCompact = dataLines.length > 0 && dataLines[0].length <= 7;
-      if (isCompact) {
-        // Format 3b (tab, no headers, 6 cols): code, name, address, city, state, zip
-        parsed = dataLines.map(cols => ({
-          code:       cols[0] || "",
-          branchName: cols[1] || "",
-          address:    cols[2] || "",
-          address2:   "",
-          city:       cols[3] || "",
-          state:      cols[4] || "",
-          zip:        cols[5] || "",
-          date:       parseDate(""),
-          ...siteDefaults
-        }));
+      const isCompact = !isFormat6 && dataLines.length > 0 && dataLines[0].length <= 7;
+      if (isFormat6) {
+          parsed = dataLines.map(cols => ({
+            code:       cols[0] || "",
+            branchName: cols[1] || "",
+            address:    cols[4] || "",
+            address2:   "",
+            city:       cols[5] || "",
+            state:      cols[6] || "",
+            zip:        cols[7] || "",
+            date:       parseDate(cols[9] || ""),
+            ...siteDefaults
+          }));
+      } else if (isCompact) {
+          // Format 3b (tab, no headers, 6-7 cols): code, name, address, city, state, zip
+          parsed = dataLines.map(cols => ({
+            code:       cols[0] || "",
+            branchName: cols[1] || "",
+            address:    cols[2] || "",
+            address2:   "",
+            city:       cols[3] || "",
+            state:      cols[4] || "",
+            zip:        cols[5] || "",
+            date:       parseDate(""),
+            ...siteDefaults
+          }));
       } else {
         // Format 1 (tab, original SiteList): col indices 0,1,4,5,6,7,11
         parsed = dataLines.map(cols => ({
@@ -953,13 +968,19 @@ export default function App() {
         }
       }
       // Compress CSV content before storing in Supabase
+      // Cap each CSV at 400KB uncompressed to stay under Supabase row limits
+      const MAX_UNCOMPRESSED = 400_000;
+      const filesToStore = csvFiles.filter(f => f.content.length <= MAX_UNCOMPRESSED);
+      const oversized = csvFiles.length - filesToStore.length;
+      if (oversized > 0) console.warn(`${oversized} CSV(s) too large to store in history (>${MAX_UNCOMPRESSED} chars), skipping.`);
       const compressedFiles = await Promise.all(
-        csvFiles.map(async f => ({
+        filesToStore.map(async f => ({
           filename: f.filename,
           content: await compressString(f.content),
           compressed: true
         }))
       );
+      console.log("saveJob called, files:", compressedFiles.length);
       saveJob({ csv_files: compressedFiles });
     } catch (err) {
       alert("Error: " + err.message);
