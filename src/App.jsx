@@ -790,10 +790,26 @@ export default function App() {
       const dataLines = isHeaderRow(lines[0]) ? lines.slice(1) : lines;
       // Format 6 detection first (bool at col 2) — can be 7, 8, or 11 cols
       const isFormat6 = /^(true|false)$/i.test((dataLines[0] || [])[2] || "");
+      // Format 7 detection: code | branchName | fullAddress (3 cols, col 2 contains commas like "123 Main St, City, ST, 12345")
+      const isFormat7 = !isFormat6 && (dataLines[0] || []).length === 3 && (dataLines[0][2] || "").includes(",");
       // Detect compact tab format (code, name, address, city, state[, zip]) — 6-7 cols
       // vs original SiteList (12+ cols with address at col 4)
-      const isCompact = !isFormat6 && dataLines.length > 0 && dataLines[0].length <= 7;
-      if (isFormat6) {
+      const isCompact = !isFormat6 && !isFormat7 && dataLines.length > 0 && dataLines[0].length <= 7;
+      if (isFormat7) {
+        // Format 7: code | branchName | "address, city, ST, zip"
+        parsed = dataLines.map(cols => {
+          const parts = (cols[2] || "").split(",").map(p => p.trim());
+          // parts: [address, city, ST, zip] or [address, city, ST zip]
+          let address = parts[0] || "";
+          let city    = parts[1] || "";
+          let state   = "", zip = "";
+          const stateZip = parts[2] || "";
+          const svMatch = stateZip.match(/^([A-Z]{2})\s+(\d{5}(-\d{4})?)$/);
+          if (svMatch) { state = svMatch[1]; zip = svMatch[2]; }
+          else { state = stateZip; zip = parts[3] || ""; }
+          return { code: cols[0] || "", branchName: cols[1] || "", address, address2: "", city, state, zip, date: parseDate(""), ...siteDefaults };
+        });
+      } else if (isFormat6) {
           parsed = dataLines.map(cols => ({
             code:       cols[0] || "",
             branchName: cols[1] || "",
