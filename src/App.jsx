@@ -750,15 +750,43 @@ export default function App() {
         ...siteDefaults
       }));
     } else if (delim === ",") {
+      // Format 8: space-separated "CODE   branchName   address, city, ST zip"
+      // Detected when first comma-part starts with a building code followed by spaces and more content
+      const firstCommaCol = (lines[0] || [])[0] || "";
+      const isFormat8 = /^[A-Z0-9]{2,6}\s+\S/.test(firstCommaCol.trim());
+      if (isFormat8) {
+        parsed = lines.map(cols => {
+          // Rejoin with commas (was split on comma delimiter) then re-parse
+          const full = cols.join(",");
+          // Extract code: first whitespace-delimited token
+          const codeMatch = full.match(/^([A-Z0-9]{2,6})\s+(.*)/);
+          if (!codeMatch) return null;
+          const code = codeMatch[1];
+          const rest = codeMatch[2]; // "branchName   address, city, ST zip" or "address, city, ST zip"
+          // Split rest on commas to find address/city/state
+          const parts = rest.split(",").map(p => p.trim());
+          // Last part: "ST zip" or "ST, zip"
+          const lastPart = parts[parts.length - 1] || "";
+          const svMatch = lastPart.match(/^([A-Z]{2})\s+(\d{5}(-\d{4})?)$/);
+          let state = "", zip = "";
+          if (svMatch) { state = svMatch[1]; zip = svMatch[2]; }
+          else if (parts.length >= 2) { state = lastPart; zip = ""; }
+          const city = parts[parts.length - 2] || "";
+          // First part contains "branchName   streetAddr" — split on first digit to find street start
+          const firstPart = parts[0] || "";
+          const streetMatch = firstPart.match(/^(.*?)\s+(\d+\s+.+)$/);
+          const branchName = streetMatch ? streetMatch[1].trim() : "";
+          const address    = streetMatch ? streetMatch[2].trim() : firstPart;
+          return { code, branchName, address, address2: "", city, state, zip, date: parseDate(""), ...siteDefaults };
+        }).filter(Boolean);
+      } else {
       // Format 3 (comma, no headers): code, name, address, city, state zip  OR  code, name, address, city, state, zip
       parsed = lines.map(cols => {
         // last field might be "CO 80260" (state+zip together) or separate
         let state = "", zip = "";
         const last = cols[cols.length - 1] || "";
-        const secondLast = cols[cols.length - 2] || "";
         const stateZipMatch = last.match(/^([A-Z]{2})\s+(\d{5}(-\d{4})?)$/);
         if (stateZipMatch) {
-          // "CO 80260" in last field
           state = stateZipMatch[1];
           zip   = stateZipMatch[2];
           return {
@@ -772,7 +800,6 @@ export default function App() {
             ...siteDefaults
           };
         } else {
-          // separate: code, name, address, city, state, zip
           return {
             code:       cols[0] || "",
             branchName: cols[1] || "",
@@ -786,6 +813,7 @@ export default function App() {
           };
         }
       });
+      }
     } else {
       const dataLines = isHeaderRow(lines[0]) ? lines.slice(1) : lines;
       // Format 6 detection first (bool at col 2) — can be 7, 8, or 11 cols
