@@ -648,6 +648,35 @@ export default function App() {
       return !isNaN(dt) ? dt.toISOString().split("T")[0] : (woConfig.defaultDate || "");
     };
 
+    // Detect Format 9: 3-line blocks — line1=code, line2=date, line3=address,city,ST,zip
+    // Signal: first line is a bare code (no tabs/commas), second line looks like a date
+    const isFormat9 = (() => {
+      if (rawLines.length < 3) return false;
+      const l0 = rawLines[0].trim();
+      const l1 = rawLines[1].trim();
+      const isBarCode = /^[A-Z0-9]{2,8}$/.test(l0);
+      const isDateLike = /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(l1) || /^\d{4}-\d{2}-\d{2}$/.test(l1);
+      return isBarCode && isDateLike;
+    })();
+
+    if (isFormat9) {
+      parsed = [];
+      for (let i = 0; i + 2 < rawLines.length; i += 3) {
+        const code    = rawLines[i].trim();
+        const date    = parseDate(rawLines[i + 1].trim());
+        const addrStr = rawLines[i + 2].trim();
+        const parts   = addrStr.split(",").map(p => p.trim());
+        let address = parts[0] || "";
+        let city    = parts[1] || "";
+        let state   = "", zip = "";
+        const stateZip = parts[2] || "";
+        const svMatch = stateZip.match(/^([A-Z]{2})\s+(\d{5}(-\d{4})?)$/);
+        if (svMatch) { state = svMatch[1]; zip = svMatch[2]; }
+        else { state = stateZip; zip = parts[3] || ""; }
+        parsed.push({ code, branchName: "", address, address2: "", city, state, zip, date, ...siteDefaults });
+      }
+    } else {
+
     // Detect delimiter: if first line has tabs use tab, else comma
     const delim = rawLines[0].includes("\t") ? "\t" : ",";
     const lines = rawLines.map(l => l.split(delim).map(c => c.replace(/^"|"$/g, "").trim()));
@@ -878,6 +907,7 @@ export default function App() {
         }));
       }
     }
+    } // end else (non-Format9)
 
     parsed = parsed.filter(s => s.code || s.address);
     if (parsed.length === 0) { setPasteError("Could not parse any rows. Make sure you copied headers too."); return; }
