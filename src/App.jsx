@@ -659,6 +659,7 @@ export default function App() {
       return isBarCode && isDateLike;
     })();
 
+    let parsed;
     if (isFormat9) {
       parsed = [];
       for (let i = 0; i + 2 < rawLines.length; i += 3) {
@@ -707,7 +708,6 @@ export default function App() {
     const isFormat5 = isServicesFamily && /^\d[HhSs]\d{4}$/.test((lines[0] || [])[2] || "");
     const isServicesFormat = isServicesFamily && !isFormat5;
 
-    let parsed;
 
     if (isServicesFormat) {
       // Format 4: code | branchName | services | quarter | region | address | city | state | zip | fullAddr | status | date
@@ -853,10 +853,14 @@ export default function App() {
       // vs original SiteList (12+ cols with address at col 4)
       const isCompact = !isFormat6 && !isFormat7 && dataLines.length > 0 && dataLines[0].length <= 7;
       if (isFormat7) {
-        // Format 7: code | [branchName |] "address, city, ST[, zip]"
+        // Format 7: code | [date | branchName |] "address, city, ST[, zip]"
+        // col 1 may be a date (3/30/2026) or a branch name (DEN7)
         parsed = dataLines.map(cols => {
           const addrCol = cols[cols.length - 1] || "";
-          const branchName = cols.length === 3 ? (cols[1] || "") : "";
+          const col1 = cols.length === 3 ? (cols[1] || "") : "";
+          const col1IsDate = /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(col1.trim()) || /^\d{4}-\d{2}-\d{2}$/.test(col1.trim());
+          const branchName = col1IsDate ? "" : col1;
+          const dateVal = col1IsDate ? parseDate(col1) : (woConfig.defaultDate || "");
           const parts = addrCol.split(",").map(p => p.trim());
           let address = parts[0] || "";
           let city    = parts[1] || "";
@@ -865,7 +869,7 @@ export default function App() {
           const svMatch = stateZip.match(/^([A-Z]{2})\s+(\d{5}(-\d{4})?)$/);
           if (svMatch) { state = svMatch[1]; zip = svMatch[2]; }
           else { state = stateZip; zip = parts[3] || ""; }
-          return { code: cols[0] || "", branchName, address, address2: "", city, state, zip, date: parseDate(""), ...siteDefaults };
+          return { code: cols[0] || "", branchName, address, address2: "", city, state, zip, date: dateVal, ...siteDefaults };
         });
       } else if (isFormat6) {
           parsed = dataLines.map(cols => ({
