@@ -530,6 +530,14 @@ export default function App() {
     disabledBg: "#e4e4e7", disabledText: "#71717a",
   };
 
+  const isPastDate = (dateStr) => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr + "T12:00:00");
+    if (isNaN(d)) return false;
+    const today = new Date(); today.setHours(0,0,0,0);
+    return d < today;
+  };
+
   const updateSite = (i, field, val) =>
     setSites(prev => prev.map((s, idx) => {
       if (idx !== i) return s;
@@ -929,14 +937,13 @@ export default function App() {
     setSites(prev => prev.map((x, idx) => idx === i ? { ...x, verifying: true, verifyError: "" } : x));
     try {
       const fullAddr = [s.address, s.city, s.state, s.zip].filter(Boolean).join(", ");
-      const url = `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(fullAddr)}&benchmark=Public_AR_Current&format=json`;
-      const res = await fetch(url);
+      const res = await fetch(`/api/geocode?address=${encodeURIComponent(fullAddr)}`);
       const data = await res.json();
       const matches = data?.result?.addressMatches;
       if (!matches || matches.length === 0) throw new Error("No match found");
       const m = matches[0];
       const c = m.addressComponents;
-      const addr = `${c.fromAddress} ${c.streetName}${c.suffixType ? " " + c.suffixType : ""}`.trim().replace(/\s+/g, " ");
+      const addr = `${c.fromAddress} ${c.streetName}${c.suffixType ? " " + c.suffixType : ""}${c.suffixDirection ? " " + c.suffixDirection : ""}`.trim().replace(/\s+/g, " ");
       setSites(prev => prev.map((x, idx) => idx === i
         ? { ...x, verifying: false, verified: true, address: addr || x.address, city: c.city || x.city, state: c.state || x.state, zip: c.zip || x.zip, verifyError: "" }
         : x));
@@ -946,8 +953,50 @@ export default function App() {
   };
 
   const verifyAll = async () => {
-    for (let i = 0; i < sites.length; i++) {
-      if (sites[i].address && sites[i].verified !== true) await verifySite(i);
+    // Use batch endpoint for multiple sites — much faster than sequential
+    const toVerify = sites.map((s, i) => ({ i, s })).filter(({ s }) => s.address && s.verified !== true);
+    if (toVerify.length === 0) return;
+
+    // Mark all as verifying
+    setSites(prev => prev.map((s, i) =>
+      toVerify.find(t => t.i === i) ? { ...s, verifying: true, verifyError: "" } : s
+    ));
+
+    try {
+      const payload = toVerify.map(({ i, s }) => ({
+        id: String(i),
+        street: s.address,
+        city: s.city,
+        state: s.state,
+        zip: s.zip
+      }));
+
+      const res = await fetch("/api/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addresses: payload })
+      });
+      const data = await res.json();
+      const results = data.results || [];
+
+      setSites(prev => {
+        const next = [...prev];
+        for (const r of results) {
+          const idx = Number(r.id);
+          if (isNaN(idx) || !next[idx]) continue;
+          if (r.matched) {
+            next[idx] = { ...next[idx], verifying: false, verified: true, address: r.address || next[idx].address, city: r.city || next[idx].city, state: r.state || next[idx].state, zip: r.zip || next[idx].zip, verifyError: "" };
+          } else {
+            next[idx] = { ...next[idx], verifying: false, verified: false, verifyError: "No match found" };
+          }
+        }
+        // Clear verifying on any that didn't come back
+        return next.map(s => s.verifying ? { ...s, verifying: false, verified: false, verifyError: "No response" } : s);
+      });
+    } catch (e) {
+      // Fall back to sequential on batch failure
+      setSites(prev => prev.map(s => s.verifying ? { ...s, verifying: false } : s));
+      for (const { i } of toVerify) await verifySite(i);
     }
   };
 
@@ -1314,7 +1363,7 @@ export default function App() {
                   {/* Remaining config fields */}
                   {[
                     { key: "startTime",   label: "Scheduled Start Time", ph: "4:30pm", hint: "e.g. 4:30pm or 13:00:00" },
-                    { key: "defaultDate",  label: "Default Start Date",   ph: "", hint: "Pre-fills date column for all sites", type: "date" },
+                    { key: "defaultDate",  label: "Default Start Date",   ph: "", hint: isPastDate(woConfig.defaultDate) ? "⚠ This date is in the past" : "Pre-fills date column for all sites", type: "date" },
                     { key: "techType",    label: "Tech Type",          ph: "Tech 1", hint: Number(woConfig.numTechs) > 1 ? `Base label — auto-numbered 1–${woConfig.numTechs}` : "Exact value in CSV" },
                     { key: "numTechs",    label: "Tech Count",         ph: "1",      hint: "Number of techs per site" },
                     { key: "numDays",     label: "Days Needed",        ph: "3",      hint: "Days per site per tech" },
@@ -1590,6 +1639,7 @@ export default function App() {
                                     type={col.type || "text"}
                                     value={site[col.key]}
                                     placeholder={col.key === 'numTechs' ? (woConfig.numTechs || col.ph) : col.key === 'numDays' ? (woConfig.numDays || col.ph) : col.key === 'date' ? (woConfig.defaultDate || col.ph) : col.key === 'budgetTech' ? (woConfig.budgetTech || col.ph) : col.key === 'payRate' ? (woConfig.payRate || col.ph) : col.ph}
+                                    style={{ background: col.key === 'date' && isPastDate(site[col.key] || (col.key === 'date' ? woConfig.defaultDate : '')) ? 'rgba(239,68,68,0.15)' : undefined, borderColor: col.key === 'date' && isPastDate(site[col.key] || (col.key === 'date' ? woConfig.defaultDate : '')) ? '#ef4444' : undefined }}
                                     onChange={e => updateSite(rowIdx, col.key, e.target.value)}
                                     onKeyDown={e => handleKeyDown(e, rowIdx, colIdx)}
                                     onFocus={() => setActiveCell({ row: rowIdx, col: colIdx })}
@@ -1623,6 +1673,7 @@ export default function App() {
                   <span>Rows: <b style={{ color: T.textMid }}>{sites.length}</b></span>
                   <span>Complete: <b style={{ color: "#22c55e" }}>{sites.filter(rowComplete).length}</b></span>
                   <span>Verified: <b style={{ color: "#22c55e" }}>{sites.filter(s => s.verified === true).length}</b></span>
+                  {(() => { const past = sites.filter(s => isPastDate(s.date || woConfig.defaultDate)); return past.length > 0 ? <span style={{ color: "#ef4444" }}>⚠ {past.length} past date{past.length > 1 ? "s" : ""}</span> : null; })()}
                 </div>
               </div>
             )}
