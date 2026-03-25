@@ -931,21 +931,28 @@ export default function App() {
     setPasteText("");
   };
 
+  const parseCensusMatch = (m) => {
+    const c = m.addressComponents;
+    const addr = [c.fromAddress, c.preDirection, c.streetName, c.suffixType, c.suffixDirection]
+      .filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    return { address: addr, city: c.city, state: c.state, zip: c.zip };
+  };
+
   const verifySite = async (i) => {
     const s = sites[i];
     if (!s.address) return;
     setSites(prev => prev.map((x, idx) => idx === i ? { ...x, verifying: true, verifyError: "" } : x));
     try {
       const fullAddr = [s.address, s.city, s.state, s.zip].filter(Boolean).join(", ");
-      const res = await fetch(`/api/geocode?address=${encodeURIComponent(fullAddr)}`);
+      const url = `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(fullAddr)}&benchmark=Public_AR_Current&format=json`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Census ${res.status}`);
       const data = await res.json();
       const matches = data?.result?.addressMatches;
       if (!matches || matches.length === 0) throw new Error("No match found");
-      const m = matches[0];
-      const c = m.addressComponents;
-      const addr = `${c.fromAddress} ${c.streetName}${c.suffixType ? " " + c.suffixType : ""}${c.suffixDirection ? " " + c.suffixDirection : ""}`.trim().replace(/\s+/g, " ");
+      const { address, city, state, zip } = parseCensusMatch(matches[0]);
       setSites(prev => prev.map((x, idx) => idx === i
-        ? { ...x, verifying: false, verified: true, address: addr || x.address, city: c.city || x.city, state: c.state || x.state, zip: c.zip || x.zip, verifyError: "" }
+        ? { ...x, verifying: false, verified: true, address: address || x.address, city: city || x.city, state: state || x.state, zip: zip || x.zip, verifyError: "" }
         : x));
     } catch (e) {
       setSites(prev => prev.map((x, idx) => idx === i ? { ...x, verifying: false, verified: false, verifyError: e.message } : x));
@@ -953,50 +960,35 @@ export default function App() {
   };
 
   const verifyAll = async () => {
-    // Use batch endpoint for multiple sites — much faster than sequential
     const toVerify = sites.map((s, i) => ({ i, s })).filter(({ s }) => s.address && s.verified !== true);
     if (toVerify.length === 0) return;
-
-    // Mark all as verifying
+    // Mark all as verifying up front
     setSites(prev => prev.map((s, i) =>
       toVerify.find(t => t.i === i) ? { ...s, verifying: true, verifyError: "" } : s
     ));
-
-    try {
-      const payload = toVerify.map(({ i, s }) => ({
-        id: String(i),
-        street: s.address,
-        city: s.city,
-        state: s.state,
-        zip: s.zip
-      }));
-
-      const res = await fetch("/api/geocode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ addresses: payload })
-      });
-      const data = await res.json();
-      const results = data.results || [];
-
-      setSites(prev => {
-        const next = [...prev];
-        for (const r of results) {
-          const idx = Number(r.id);
-          if (isNaN(idx) || !next[idx]) continue;
-          if (r.matched) {
-            next[idx] = { ...next[idx], verifying: false, verified: true, address: r.address || next[idx].address, city: r.city || next[idx].city, state: r.state || next[idx].state, zip: r.zip || next[idx].zip, verifyError: "" };
-          } else {
-            next[idx] = { ...next[idx], verifying: false, verified: false, verifyError: "No match found" };
-          }
+    // Census onelineaddress supports CORS — run concurrently (cap at 5 at a time)
+    const concurrency = 5;
+    for (let start = 0; start < toVerify.length; start += concurrency) {
+      const chunk = toVerify.slice(start, start + concurrency);
+      await Promise.all(chunk.map(async ({ i }) => {
+        const s = sites[i];
+        try {
+          const fullAddr = [s.address, s.city, s.state, s.zip].filter(Boolean).join(", ");
+          const url = `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(fullAddr)}&benchmark=Public_AR_Current&format=json`;
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`Census ${res.status}`);
+          const data = await res.json();
+          const matches = data?.result?.addressMatches;
+          if (!matches || matches.length === 0) throw new Error("No match found");
+          const { address, city, state, zip } = parseCensusMatch(matches[0]);
+          setSites(prev => prev.map((x, idx) => idx === i
+            ? { ...x, verifying: false, verified: true, address: address || x.address, city: city || x.city, state: state || x.state, zip: zip || x.zip, verifyError: "" }
+            : x));
+        } catch (e) {
+          setSites(prev => prev.map((x, idx) => idx === i
+            ? { ...x, verifying: false, verified: false, verifyError: e.message } : x));
         }
-        // Clear verifying on any that didn't come back
-        return next.map(s => s.verifying ? { ...s, verifying: false, verified: false, verifyError: "No response" } : s);
-      });
-    } catch (e) {
-      // Fall back to sequential on batch failure
-      setSites(prev => prev.map(s => s.verifying ? { ...s, verifying: false } : s));
-      for (const { i } of toVerify) await verifySite(i);
+      }));
     }
   };
 
