@@ -182,6 +182,20 @@ const COLS = [
   { key: "payRate",    label: "Pay $",       width: 80,  ph: "↓" },
 ];
 
+
+const BUILTIN_PARSERS = [
+  { id: "fmt1",  name: "SiteList (Original)",         delim: "tab",   cols: "12+", signal: "12+ tab cols, address at col 4",                  map: { code:0, branchName:1, address:4, city:5, state:6, zip:7, date:11 } },
+  { id: "fmt2",  name: "Building Headers",             delim: "tab",   cols: "any", signal: "Header row with buildingcode/buildingname",         map: { code:"buildingcode", branchName:"buildingname", address:"address", city:"city", state:"state", zip:"zip", date:"date" } },
+  { id: "fmt3a", name: "Comma Compact (state+zip)",    delim: "comma", cols: "5",   signal: "Comma-delimited, last field is 'ST 12345'",         map: { code:0, branchName:1, address:2, city:3, stateZipCombined:4 } },
+  { id: "fmt3b", name: "Comma Compact (separate)",     delim: "comma", cols: "6",   signal: "Comma-delimited, separate state and zip fields",    map: { code:0, branchName:1, address:2, city:3, state:4, zip:5 } },
+  { id: "fmt4",  name: "Services Sheet (with services)",delim: "tab",  cols: "11+", signal: "Tab, 8+ cols, has 'Scheduled' + quarter, quoted services col", map: { code:0, branchName:1, address:5, city:6, state:7, zip:8, date:11 } },
+  { id: "fmt5",  name: "Services Sheet (no services)", delim: "tab",   cols: "11+", signal: "Tab, 8+ cols, quarter at col 2",                   map: { code:0, branchName:1, address:4, city:5, state:6, zip:7, date:11 } },
+  { id: "fmt6",  name: "Bool+Region Sheet",            delim: "tab",   cols: "7-11",signal: "Tab, col 2 is true/false",                         map: { code:0, branchName:1, address:4, city:5, state:6, zip:7, date:9 } },
+  { id: "fmt7",  name: "Code + Full Address",          delim: "tab",   cols: "2-3", signal: "Tab, 2-3 cols, last col contains commas",           map: { code:0, branchName:"col1_if_not_date", address:"from_last_col_csv", city:"from_last_col_csv", state:"from_last_col_csv", zip:"from_last_col_csv", date:"col1_if_date" } },
+  { id: "fmt8",  name: "Space-Code + Comma Address",   delim: "comma", cols: "3+",  signal: "Comma-delimited, first field starts with CODE+spaces", map: { code:"first_token", branchName:"text_before_street_num", address:"text_from_street_num", city:"penultimate_comma_part", state:"last_part_ST", zip:"last_part_zip" } },
+  { id: "fmt9",  name: "3-Line Block",                 delim: "none",  cols: "n/a", signal: "Line 1 = bare code, line 2 = date, line 3 = address,city,ST,zip", map: { code:"line0", date:"line1", address:"line2_csv0", city:"line2_csv1", state:"line2_csv2", zip:"line2_csv3" } },
+];
+
 const STEP_LABELS = ["Project Info", "Add Sites", "Review & Export"];
 
 const JOKES = [
@@ -324,6 +338,12 @@ export default function App() {
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [jobHistory, setJobHistory] = useState([]);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const [showParserPanel, setShowParserPanel] = useState(false);
+  const [customParsers, setCustomParsers] = useState([]);
+  const [editingParser, setEditingParser] = useState(null);
+  const [parserForm, setParserForm] = useState({ name: "", delim: "tab", signal: "", sampleData: "", colCode: "0", colBranch: "1", colAddr: "2", colCity: "3", colState: "4", colZip: "5", colDate: "" });
+  const [parserPreview, setParserPreview] = useState([]);
+  const [parserPreviewError, setParserPreviewError] = useState("");
   const [historySearch, setHistorySearch] = useState("");
   const [showLockModal, setShowLockModal] = useState(false);
   const [lockPwInput, setLockPwInput] = useState("");
@@ -369,6 +389,10 @@ export default function App() {
           if (d.overriddenBuiltins) setOverriddenBuiltins(d.overriddenBuiltins);
         }
       })
+      .catch(() => {});
+    sbFetch("/custom_parsers?id=eq.1&select=data")
+      .then(r => r.ok ? r.json() : null)
+      .then(rows => { if (rows?.[0]?.data) setCustomParsers(rows[0].data || []); })
       .catch(() => {});
     sbFetch("/project_history?id=eq.1&select=project_ids,display_names")
       .then(r => r.ok ? r.json() : null)
@@ -450,6 +474,45 @@ export default function App() {
       })
       .then(rows => { if (rows?.[0]) setJobHistory(prev => [rows[0], ...prev].slice(0, 100)); })
       .catch(e => console.error("saveJob network error:", e));
+  };
+
+  const saveCustomParsers = (next) => {
+    setCustomParsers(next);
+    sbFetch("/custom_parsers?id=eq.1", {
+      method: "PATCH", prefer: "return=minimal",
+      body: JSON.stringify({ data: next, updated_at: new Date().toISOString() })
+    }).then(r => { if (!r.ok) r.text().then(t => console.error("saveCustomParsers failed:", t)); }).catch(() => {});
+  };
+
+  const runParserPreview = (form) => {
+    setParserPreviewError("");
+    setParserPreview([]);
+    const raw = (form.sampleData || "").trim();
+    if (!raw) return;
+    try {
+      const delim = form.delim === "tab" ? "\t" : ",";
+      const lines = raw.split("\n").map(l => l.split(delim).map(c => c.trim()));
+      const get = (cols, idx) => { const n = parseInt(idx); return isNaN(n) ? "" : (cols[n] || ""); };
+      const rows = lines.filter(c => c.length > 1).map(cols => ({
+        code:       get(cols, form.colCode),
+        branchName: get(cols, form.colBranch),
+        address:    get(cols, form.colAddr),
+        city:       get(cols, form.colCity),
+        state:      get(cols, form.colState),
+        zip:        get(cols, form.colZip),
+        date:       get(cols, form.colDate),
+      })).filter(r => r.code || r.address);
+      if (rows.length === 0) { setParserPreviewError("No rows matched — check your column indices"); return; }
+      setParserPreview(rows);
+    } catch (e) {
+      setParserPreviewError(e.message);
+    }
+  };
+
+  const applyCustomParser = (parser) => {
+    const raw = (parser.sampleData || "").trim();
+    if (!raw) return;
+    runParserPreview(parser);
   };
 
   const saveCustomWoTypes = (next, deleted = deletedBuiltins, overridden = overriddenBuiltins) => {
@@ -970,8 +1033,7 @@ export default function App() {
     const concurrency = 5;
     for (let start = 0; start < toVerify.length; start += concurrency) {
       const chunk = toVerify.slice(start, start + concurrency);
-      await Promise.all(chunk.map(async ({ i }) => {
-        const s = sites[i];
+      await Promise.all(chunk.map(async ({ i, s }) => {
         try {
           const fullAddr = [s.address, s.city, s.state, s.zip].filter(Boolean).join(", ");
           const url = `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(fullAddr)}&benchmark=Public_AR_Current&format=json`;
@@ -1198,6 +1260,9 @@ export default function App() {
             ))}
             <button onClick={() => setDark(d => !d)} style={{ marginLeft: 12, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, transition: "all .15s" }}>
               {dark ? "☀ Light" : "🌙 Dark"}
+            </button>
+            <button onClick={() => setShowParserPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>
+              ⚙ Parsers
             </button>
             <button onClick={() => setShowHistoryPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>
               📋 History{jobHistory.length > 0 ? ` (${jobHistory.length})` : ""}
@@ -1570,6 +1635,41 @@ export default function App() {
               </div>
             ) : pasteMode ? (
               <div>
+                {customParsers.length > 0 && (
+                  <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, color: T.textFaint }}>Custom parser:</span>
+                    {customParsers.map(p => (
+                      <button key={p.id} onClick={() => {
+                        setPasteError("");
+                        if (!pasteText.trim()) { setPasteError("Paste your data first, then select a parser."); return; }
+                        try {
+                          const delim = p.delim === "tab" ? "\t" : ",";
+                          const rawLines = pasteText.trim().split("\n").filter(l => l.trim());
+                          const lines = rawLines.map(l => l.split(delim).map(c => c.trim()));
+                          const get = (cols, idx) => { const n = parseInt(idx); return isNaN(n) ? "" : (cols[n] || ""); };
+                          const parsed = lines.filter(c => c.length > 1).map(cols => ({
+                            code:       get(cols, p.colCode),
+                            branchName: get(cols, p.colBranch),
+                            address:    get(cols, p.colAddr),
+                            address2:   "",
+                            city:       get(cols, p.colCity),
+                            state:      get(cols, p.colState),
+                            zip:        get(cols, p.colZip),
+                            date:       get(cols, p.colDate) ? (() => { const r = get(cols, p.colDate); const m = r.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if (m) { let [,mo,d,y] = m; if (y.length===2) y="20"+y; return `${y}-${mo.padStart(2,"0")}-${d.padStart(2,"0")}`; } return r || woConfig.defaultDate || ""; })() : (woConfig.defaultDate || ""),
+                            numTechs: woConfig.numTechs || "1",
+                            numDays: woConfig.numDays || "1",
+                            verified: null, verifying: false, verifyError: ""
+                          })).filter(r => r.code || r.address);
+                          if (parsed.length === 0) { setPasteError("Parser matched 0 rows — check column indices in ⚙ Parsers"); return; }
+                          setSites(prev => { const ex = prev.filter(s => s.code || s.address || s.branchName); return ex.length > 0 ? [...ex, ...parsed] : parsed; });
+                          setPasteMode(false); setPasteText("");
+                        } catch(e) { setPasteError("Parser error: " + e.message); }
+                      }} style={{ padding: "4px 12px", borderRadius: 20, border: `1px solid ${T.border2}`, background: T.surface2, color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>
+                        ⚙ {p.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <p style={{ color: T.textDim, fontSize: 12, marginBottom: 10, lineHeight: 1.6 }}>
                   Copy rows from your SiteList and paste below. Columns: <span style={{ color: T.textMid }}>Building Code · BranchName · TargetQuarter · TimeZone · Address · City · State · ZipCode · CompleteAddress · LVV · Status · PlannedDate</span>
                 </p>
@@ -1872,6 +1972,149 @@ export default function App() {
         )}
 
         {/* Job History panel */}
+        {/* ── Parser Panel ─────────────────────────────────────────────── */}
+        {showParserPanel && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 400, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }} onClick={() => { setShowParserPanel(false); setEditingParser(null); setParserPreview([]); setParserPreviewError(""); }}>
+            <div style={{ background: T.surface, borderLeft: `2px solid ${T.accent}`, height: "100%", width: "100%", maxWidth: 560, overflowY: "auto", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div style={{ padding: "1.25rem 1.5rem", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, background: T.surface, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accentHi }}>⚙ PASTE PARSERS</div>
+                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 2 }}>Built-in parsers are read-only · Create custom parsers below</div>
+                </div>
+                <button onClick={() => { setShowParserPanel(false); setEditingParser(null); setParserPreview([]); }} style={{ background: "transparent", border: "none", color: T.textMid, cursor: "pointer", fontSize: 20 }}>✕</button>
+              </div>
+
+              <div style={{ flex: 1, padding: "1rem 1.5rem", display: "flex", flexDirection: "column", gap: 16 }}>
+
+                {/* Built-in parsers */}
+                <div>
+                  <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Built-in Parsers (read-only)</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {BUILTIN_PARSERS.map(p => (
+                      <div key={p.id} style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 14px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5, color: T.textMid }}>{p.name}</div>
+                          <div style={{ fontSize: 10, color: T.textFaint, background: T.surface, borderRadius: 4, padding: "2px 8px" }}>BUILT-IN</div>
+                        </div>
+                        <div style={{ fontSize: 11, color: T.textFaint, lineHeight: 1.6 }}>
+                          <span style={{ color: T.textDim }}>Delim:</span> {p.delim} &nbsp;·&nbsp; <span style={{ color: T.textDim }}>Cols:</span> {p.cols}<br/>
+                          <span style={{ color: T.textDim }}>Detected by:</span> {p.signal}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom parsers */}
+                <div>
+                  <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Custom Parsers ({customParsers.length})</div>
+                  {customParsers.length === 0 && (
+                    <div style={{ fontSize: 12, color: T.textFaint, fontStyle: "italic", marginBottom: 10 }}>No custom parsers yet — create one below</div>
+                  )}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+                    {customParsers.map((p, pi) => (
+                      <div key={p.id} style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 14px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5, color: T.accentHi }}>{p.name}</div>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button onClick={() => { setEditingParser(p.id); setParserForm({ ...p }); setParserPreview([]); }} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 5, padding: "2px 10px", color: T.textDim, cursor: "pointer", fontSize: 10 }}>edit</button>
+                            <button onClick={() => { const next = customParsers.filter(x => x.id !== p.id); saveCustomParsers(next); }} style={{ background: "transparent", border: "1px solid #ef4444", borderRadius: 5, padding: "2px 10px", color: "#ef4444", cursor: "pointer", fontSize: 10 }}>✕</button>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: T.textFaint, lineHeight: 1.6 }}>
+                          Delim: {p.delim} &nbsp;·&nbsp; Code col: {p.colCode} &nbsp;·&nbsp; Addr col: {p.colAddr} &nbsp;·&nbsp; City: {p.colCity} &nbsp;·&nbsp; State: {p.colState} &nbsp;·&nbsp; ZIP: {p.colZip}{p.colDate ? ` · Date: ${p.colDate}` : ""}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Create / Edit form */}
+                  <div style={{ background: T.surface, border: `1px solid ${editingParser ? T.accent : T.border}`, borderRadius: 10, padding: "1rem" }}>
+                    <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>{editingParser ? "Edit Custom Parser" : "New Custom Parser"}</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                      <div style={{ gridColumn: "span 2" }}>
+                        <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Parser Name</label>
+                        <input style={T.inp} placeholder="e.g. Acme Site Export" value={parserForm.name || ""} onChange={e => setParserForm(p => ({ ...p, name: e.target.value }))} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => e.target.style.borderColor=T.border2} />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Delimiter</label>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {["tab", "comma"].map(d => (
+                            <button key={d} onClick={() => setParserForm(p => ({ ...p, delim: d }))} style={{ flex: 1, padding: "8px", borderRadius: 7, border: `2px solid ${parserForm.delim === d ? T.accent : T.border2}`, background: parserForm.delim === d ? `${T.accent}22` : "transparent", color: parserForm.delim === d ? T.accentHi : T.textMid, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>{d}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Detection Signal (optional)</label>
+                        <input style={T.inp} placeholder="e.g. col 3 = Region" value={parserForm.signal || ""} onChange={e => setParserForm(p => ({ ...p, signal: e.target.value }))} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => e.target.style.borderColor=T.border2} />
+                      </div>
+                      {[
+                        { key: "colCode",   label: "Code Column #",    ph: "0" },
+                        { key: "colBranch", label: "Branch Name Col #", ph: "1" },
+                        { key: "colAddr",   label: "Address Column #",  ph: "2" },
+                        { key: "colCity",   label: "City Column #",     ph: "3" },
+                        { key: "colState",  label: "State Column #",    ph: "4" },
+                        { key: "colZip",    label: "ZIP Column #",      ph: "5" },
+                        { key: "colDate",   label: "Date Column # (opt)",ph: "" },
+                      ].map(({ key, label, ph }) => (
+                        <div key={key}>
+                          <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>{label}</label>
+                          <input style={T.inp} placeholder={ph} value={parserForm[key] || ""} onChange={e => setParserForm(p => ({ ...p, [key]: e.target.value }))} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => e.target.style.borderColor=T.border2} />
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Sample data + preview */}
+                    <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Sample Data (paste a few rows to test)</label>
+                    <textarea
+                      value={parserForm.sampleData || ""}
+                      onChange={e => setParserForm(p => ({ ...p, sampleData: e.target.value }))}
+                      placeholder={"Paste sample rows here to preview how they'll parse..."}
+                      style={{ width: "100%", background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "8px 12px", color: T.text, fontSize: 11, fontFamily: "inherit", height: 100, resize: "vertical", lineHeight: 1.6, marginBottom: 8 }}
+                    />
+                    <button onClick={() => runParserPreview(parserForm)} style={{ width: "100%", padding: "7px", borderRadius: 7, border: `1px solid ${T.border2}`, background: T.surface2, color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", marginBottom: 8 }}>▶ Preview Parse</button>
+
+                    {parserPreviewError && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8 }}>⚠ {parserPreviewError}</div>}
+                    {parserPreview.length > 0 && (
+                      <div style={{ background: T.surface2, borderRadius: 7, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: T.textDim }}>
+                        <div style={{ fontWeight: 600, color: "#22c55e", marginBottom: 6 }}>✓ {parserPreview.length} row{parserPreview.length > 1 ? "s" : ""} parsed</div>
+                        {parserPreview.slice(0, 3).map((r, i) => (
+                          <div key={i} style={{ borderTop: `1px solid ${T.border}`, paddingTop: 4, marginTop: 4, lineHeight: 1.8 }}>
+                            <span style={{ color: T.accent }}>{r.code}</span> · {r.address}, {r.city}, {r.state} {r.zip}{r.date ? ` · ${r.date}` : ""}
+                          </div>
+                        ))}
+                        {parserPreview.length > 3 && <div style={{ color: T.textFaint, marginTop: 4 }}>+{parserPreview.length - 3} more</div>}
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {editingParser && <button onClick={() => { setEditingParser(null); setParserForm({ name: "", delim: "tab", signal: "", sampleData: "", colCode: "0", colBranch: "1", colAddr: "2", colCity: "3", colState: "4", colZip: "5", colDate: "" }); setParserPreview([]); }} style={{ flex: 1, padding: "9px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>Cancel</button>}
+                      <button
+                        disabled={!parserForm.name?.trim()}
+                        onClick={() => {
+                          const id = editingParser || `custom_${Date.now()}`;
+                          const entry = { ...parserForm, id };
+                          const next = editingParser
+                            ? customParsers.map(p => p.id === editingParser ? entry : p)
+                            : [...customParsers, entry];
+                          saveCustomParsers(next);
+                          setEditingParser(null);
+                          setParserForm({ name: "", delim: "tab", signal: "", sampleData: "", colCode: "0", colBranch: "1", colAddr: "2", colCity: "3", colState: "4", colZip: "5", colDate: "" });
+                          setParserPreview([]);
+                        }}
+                        style={{ flex: 2, padding: "9px", borderRadius: 8, border: "none", background: parserForm.name?.trim() ? `linear-gradient(135deg,${T.accent},#dc6209)` : T.disabledBg, color: parserForm.name?.trim() ? "#000" : T.disabledText, cursor: parserForm.name?.trim() ? "pointer" : "not-allowed", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2 }}>
+                        {editingParser ? "SAVE CHANGES" : "SAVE PARSER"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {showHistoryPanel && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 400, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }} onClick={() => setShowHistoryPanel(false)}>
             <div style={{ background: T.surface, borderLeft: `2px solid ${T.accent}`, height: "100%", width: "100%", maxWidth: 480, overflowY: "auto", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
