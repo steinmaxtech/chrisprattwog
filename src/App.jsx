@@ -402,11 +402,12 @@ export default function App() {
   const [logoClickCount, setLogoClickCount] = useState(0);
   const [aiParserLoading, setAiParserLoading] = useState(false);
   const [aiParserError, setAiParserError] = useState("");
+  const [aiPasteLoading, setAiPasteLoading] = useState(false);
   const konamiRef = useRef([]);
   const konamiCode = ["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
   const [customParsers, setCustomParsers] = useState([]);
   const [editingParser, setEditingParser] = useState(null);
-  const [parserForm, setParserForm] = useState({ name: "", delim: "tab", signal: "", sampleData: "", colCode: "0", colBranch: "1", colAddr: "2", colCity: "3", colState: "4", colZip: "5", colDate: "" });
+  const [parserForm, setParserForm] = useState({ name: "", delim: "tab", signal: "", sampleData: "", colCode: "0", colBranch: "1", colAddr: "2", colCity: "3", colState: "4", colZip: "5", colDate: "", colFullAddr: "" });
   const [parserPreview, setParserPreview] = useState([]);
   const [parserPreviewError, setParserPreviewError] = useState("");
   const [historySearch, setHistorySearch] = useState("");
@@ -577,6 +578,19 @@ export default function App() {
     }).then(r => { if (!r.ok) r.text().then(t => console.error("saveCustomParsers failed:", t)); }).catch(() => {});
   };
 
+
+  // Split a combined address column into parts
+  const splitFullAddr = (str) => {
+    const parts = str.split(",").map(p => p.trim());
+    // Last part could be "CO 80602" (state+zip) or separate
+    const last = parts[parts.length - 1] || "";
+    const stateZip = last.match(/^([A-Z]{2})\s+(\d{5}(-\d{4})?)$/);
+    if (stateZip) {
+      return { address: parts[0] || "", city: parts[1] || "", state: stateZip[1], zip: stateZip[2] };
+    }
+    return { address: parts[0] || "", city: parts[1] || "", state: parts[2] || "", zip: parts[3] || "" };
+  };
+
   const runParserPreview = (form) => {
     setParserPreviewError("");
     setParserPreview([]);
@@ -586,15 +600,24 @@ export default function App() {
       const delim = form.delim === "tab" ? "\t" : ",";
       const lines = raw.split("\n").map(l => l.split(delim).map(c => c.trim()));
       const get = (cols, idx) => { const n = parseInt(idx); return isNaN(n) ? "" : (cols[n] || ""); };
-      const rows = lines.filter(c => c.length > 1).map(cols => ({
-        code:       get(cols, form.colCode),
-        branchName: get(cols, form.colBranch),
-        address:    get(cols, form.colAddr),
-        city:       get(cols, form.colCity),
-        state:      get(cols, form.colState),
-        zip:        get(cols, form.colZip),
-        date:       get(cols, form.colDate),
-      })).filter(r => r.code || r.address);
+      const rows = lines.filter(c => c.length > 1).map(cols => {
+        const base = {
+          code:       get(cols, form.colCode),
+          branchName: get(cols, form.colBranch),
+          date:       get(cols, form.colDate),
+        };
+        if (form.colFullAddr && !isNaN(parseInt(form.colFullAddr))) {
+          const combined = get(cols, form.colFullAddr);
+          const { address, city, state, zip } = splitFullAddr(combined);
+          return { ...base, address, city, state, zip };
+        }
+        return { ...base,
+          address: get(cols, form.colAddr),
+          city:    get(cols, form.colCity),
+          state:   get(cols, form.colState),
+          zip:     get(cols, form.colZip),
+        };
+      }).filter(r => r.code || r.address);
       if (rows.length === 0) { setParserPreviewError("No rows matched — check your column indices"); return; }
       setParserPreview(rows);
     } catch (e) {
@@ -1387,9 +1410,7 @@ export default function App() {
             <button onClick={() => setDark(d => !d)} style={{ marginLeft: 12, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, transition: "all .15s" }}>
               {dark ? "☀ Light" : "🌙 Dark"}
             </button>
-            <button onClick={() => setShowParserPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>
-              ⚙ Parsers
-            </button>
+{adminUnlocked && <button onClick={() => setShowParserPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>⚙ Parsers</button>}
             <button onClick={() => setShowHistoryPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>
               📋 History{jobHistory.length > 0 ? ` (${jobHistory.length})` : ""}
             </button>
@@ -1819,7 +1840,7 @@ export default function App() {
               </div>
             ) : pasteMode ? (
               <div>
-                {customParsers.length > 0 && (
+                {adminUnlocked && customParsers.length > 0 && (
                   <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span style={{ fontSize: 11, color: T.textFaint }}>Custom parser:</span>
                     {customParsers.map(p => (
@@ -1864,9 +1885,47 @@ export default function App() {
                   style={{ width: "100%", background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "10px 13px", color: T.text, fontSize: 11, fontFamily: "inherit", height: 180, resize: "vertical", lineHeight: 1.6 }}
                 />
                 {pasteError && <div style={{ color: "#f87171", fontSize: 11, marginTop: 6 }}>⚠ {pasteError}</div>}
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                   <button onClick={parsePaste} style={{ background: `linear-gradient(135deg,${T.accent},#dc6209)`, border: "none", borderRadius: 6, padding: "8px 20px", color: "#000", cursor: "pointer", fontSize: 12, fontFamily: "'Bebas Neue',sans-serif", letterSpacing: 1.5 }}>
                     PARSE {pasteText.trim().split("\n").filter(Boolean).length} ROWS →
+                  </button>
+                  <button
+                    disabled={aiPasteLoading || !pasteText.trim()}
+                    onClick={async () => {
+                      if (!pasteText.trim()) return;
+                      setAiPasteLoading(true);
+                      setPasteError("");
+                      try {
+                        const res = await fetch("/api/ai", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ sampleData: pasteText.trim().slice(0, 1200) })
+                        });
+                        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || e.error || `Error ${res.status}`); }
+                        const p = await res.json();
+                        // Apply the mapping directly to the pasted data
+                        const delim = p.delim === "tab" ? "\t" : ",";
+                        const rawLines = pasteText.trim().split("\n").filter(l => l.trim());
+                        const lines = rawLines.map(l => l.split(delim).map(c => c.replace(/^"|"$/g, "").trim()));
+                        const get = (cols, idx) => { const n = parseInt(idx); return isNaN(n) ? "" : (cols[n] || ""); };
+                        const parseD = (r) => { if (!r) return woConfig.defaultDate || ""; const m = r.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if (m) { let [,mo,d,y] = m; if (y.length===2) y="20"+y; return `${y}-${mo.padStart(2,"0")}-${d.padStart(2,"0")}`; } return r || woConfig.defaultDate || ""; };
+                        const parsed = lines.filter(c => c.length > 1).map(cols => {
+                          const base = { code: get(cols, p.colCode), branchName: get(cols, p.colBranch), address2: "", date: parseD(get(cols, p.colDate)), numTechs: woConfig.numTechs || "1", numDays: woConfig.numDays || "1", verified: null, verifying: false, verifyError: "" };
+                          if (p.colFullAddr && !isNaN(parseInt(p.colFullAddr))) {
+                            const parts = get(cols, p.colFullAddr).split(",").map(x => x.trim());
+                            const last = parts[parts.length-1] || ""; const sv = last.match(/^([A-Z]{2})\s+(\d{5})$/);
+                            return { ...base, address: parts[0]||"", city: parts[1]||"", state: sv ? sv[1] : (parts[2]||""), zip: sv ? sv[2] : (parts[3]||"") };
+                          }
+                          return { ...base, address: get(cols, p.colAddr), city: get(cols, p.colCity), state: get(cols, p.colState), zip: get(cols, p.colZip) };
+                        }).filter(r => r.code || r.address);
+                        if (parsed.length === 0) { setPasteError("AI couldn\'t find site data — try PARSE → instead"); setAiPasteLoading(false); return; }
+                        setSites(prev => { const ex = prev.filter(s => s.code || s.address || s.branchName); return ex.length > 0 ? [...ex, ...parsed] : parsed; });
+                        setPasteMode(false); setPasteText("");
+                      } catch(e) { setPasteError("✨ AI Parse failed: " + e.message); }
+                      setAiPasteLoading(false);
+                    }}
+                    style={{ padding: "8px 18px", borderRadius: 6, border: "none", background: aiPasteLoading ? T.disabledBg : "linear-gradient(135deg,#7c3aed,#5b21b6)", color: aiPasteLoading ? T.disabledText : "#fff", cursor: aiPasteLoading || !pasteText.trim() ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5 }}>
+                    {aiPasteLoading ? "⏳ Analyzing..." : "✨ AI Parse"}
                   </button>
                   <button onClick={() => setPasteMode(false)} style={{ background: T.disabledBg, border: `1px solid ${T.border2}`, borderRadius: 6, padding: "8px 16px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>
                     Skip — Enter Manually
@@ -2214,7 +2273,7 @@ export default function App() {
                           </div>
                         </div>
                         <div style={{ fontSize: 11, color: T.textFaint, lineHeight: 1.6 }}>
-                          Delim: {p.delim} &nbsp;·&nbsp; Code col: {p.colCode} &nbsp;·&nbsp; Addr col: {p.colAddr} &nbsp;·&nbsp; City: {p.colCity} &nbsp;·&nbsp; State: {p.colState} &nbsp;·&nbsp; ZIP: {p.colZip}{p.colDate ? ` · Date: ${p.colDate}` : ""}
+                          Delim: {p.delim} &nbsp;·&nbsp; Code col: {p.colCode}{p.colFullAddr ? ` · Full addr col: ${p.colFullAddr}` : ` · Addr: ${p.colAddr} · City: ${p.colCity} · ST: ${p.colState} · ZIP: ${p.colZip}`}{p.colDate ? ` · Date: ${p.colDate}` : ""}
                         </div>
                       </div>
                     ))}
@@ -2243,15 +2302,17 @@ export default function App() {
                       {[
                         { key: "colCode",   label: "Code Column #",    ph: "0" },
                         { key: "colBranch", label: "Branch Name Col #", ph: "1" },
-                        { key: "colAddr",   label: "Address Column #",  ph: "2" },
+                        { key: "colAddr",   label: "Address Column #",  ph: "2", hint: "Use this OR Full Address Col below" },
                         { key: "colCity",   label: "City Column #",     ph: "3" },
                         { key: "colState",  label: "State Column #",    ph: "4" },
                         { key: "colZip",    label: "ZIP Column #",      ph: "5" },
                         { key: "colDate",   label: "Date Column # (opt)",ph: "" },
-                      ].map(({ key, label, ph }) => (
+                        { key: "colFullAddr", label: "Full Address Col # (opt)", ph: "", hint: "If addr/city/state/zip are in one column like '123 Main, Denver, CO, 80201'" },
+                      ].map(({ key, label, ph, hint }) => (
                         <div key={key}>
                           <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>{label}</label>
                           <input style={T.inp} placeholder={ph} value={parserForm[key] || ""} onChange={e => setParserForm(p => ({ ...p, [key]: e.target.value }))} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => e.target.style.borderColor=T.border2} />
+                          {hint && <div style={{ fontSize: 10, color: T.textFaint, marginTop: 3 }}>{hint}</div>}
                         </div>
                       ))}
                     </div>
@@ -2286,7 +2347,7 @@ export default function App() {
                     )}
 
                     <div style={{ display: "flex", gap: 8 }}>
-                      {editingParser && <button onClick={() => { setEditingParser(null); setParserForm({ name: "", delim: "tab", signal: "", sampleData: "", colCode: "0", colBranch: "1", colAddr: "2", colCity: "3", colState: "4", colZip: "5", colDate: "" }); setParserPreview([]); }} style={{ flex: 1, padding: "9px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>Cancel</button>}
+                      {editingParser && <button onClick={() => { setEditingParser(null); setParserForm({ name: "", delim: "tab", signal: "", sampleData: "", colCode: "0", colBranch: "1", colAddr: "2", colCity: "3", colState: "4", colZip: "5", colDate: "", colFullAddr: "" }); setParserPreview([]); }} style={{ flex: 1, padding: "9px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>Cancel</button>}
                       <button
                         disabled={!parserForm.name?.trim()}
                         onClick={() => {
@@ -2297,7 +2358,7 @@ export default function App() {
                             : [...customParsers, entry];
                           saveCustomParsers(next);
                           setEditingParser(null);
-                          setParserForm({ name: "", delim: "tab", signal: "", sampleData: "", colCode: "0", colBranch: "1", colAddr: "2", colCity: "3", colState: "4", colZip: "5", colDate: "" });
+                          setParserForm({ name: "", delim: "tab", signal: "", sampleData: "", colCode: "0", colBranch: "1", colAddr: "2", colCity: "3", colState: "4", colZip: "5", colDate: "", colFullAddr: "" });
                           setParserPreview([]);
                         }}
                         style={{ flex: 2, padding: "9px", borderRadius: 8, border: "none", background: parserForm.name?.trim() ? `linear-gradient(135deg,${T.accent},#dc6209)` : T.disabledBg, color: parserForm.name?.trim() ? "#000" : T.disabledText, cursor: parserForm.name?.trim() ? "pointer" : "not-allowed", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2 }}>
