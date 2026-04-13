@@ -1,4 +1,5 @@
 // api/ai.js — Vercel serverless function
+// Proxies AI parser detection to Anthropic, keeps key server-side
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -14,54 +15,39 @@ export default async function handler(req, res) {
   const { sampleData } = req.body || {};
   if (!sampleData?.trim()) return res.status(400).json({ error: "sampleData required" });
 
-  // Pre-process: split into rows and label every column with its index
+  // Label every column so the AI reasons about positions, not raw text
   const raw = sampleData.trim();
   const firstLine = raw.split("\n")[0];
-  const delim = firstLine.includes("\t") ? "\t" : ",";
-  const delimLabel = firstLine.includes("\t") ? "tab" : "comma";
+  const isTab = firstLine.includes("\t");
+  const delim = isTab ? "\t" : ",";
+  const delimLabel = isTab ? "tab" : "comma";
 
-  const rows = raw.split("\n").slice(0, 6).filter(l => l.trim()).map(line => {
+  const annotated = raw.split("\n").slice(0, 6).filter(l => l.trim()).map((line, ri) => {
     const cols = line.split(delim).map(c => c.replace(/^"|"$/g, "").trim());
-    return cols.map((c, i) => `  col[${i}] = "${c}"`).join("\n");
-  });
+    return `ROW ${ri}:\n${cols.map((c, i) => `  col[${i}] = "${c}"`).join("\n")}`;
+  }).join("\n\n");
 
-  const annotated = rows.map((r, i) => `ROW ${i}:\n${r}`).join("\n\n");
+  const prompt = `You are analyzing exported spreadsheet rows to find which columns hold work order location data. Each column is labeled with its 0-based index.
 
-  const prompt = `You are analyzing spreadsheet export data to figure out which columns contain the information needed for a FieldNation work order upload.
-
-Here is the raw data, with each column labeled by its index:
-
+DATA:
 ${annotated}
 
-Your job is to identify which column index (0-based integer) holds each of these 7 values. Think through each column carefully — most columns will be irrelevant (region, timezone, quarter, status, boolean flags, duplicate/combined address strings, service lists, etc.) and should be skipped.
+Find the column index for each of these fields. Most columns will be irrelevant — skip them.
 
-The 7 values you must find:
+SITE CODE: Short unique location ID, 2-8 uppercase alphanumeric chars. Real examples: "FB01", "B015", "X382", "FB2F", "UEAA". Almost always col[0]. Never a full name or numbers-only ID.
 
-SITE CODE — A short unique identifier for the physical location. Usually 2–8 uppercase alphanumeric characters. Examples from real data: "FB01", "B015", "X382", "UEAA", "Y836", "FB2F". It is NOT a full name, NOT a number-only ID, NOT an address. Typically the very first column.
+BRANCH NAME: Human-readable location name. Examples: "Linden", "Green Valley Ranch", "Harbor East", "Downers Grove South". Often col[1]. Use "" if absent.
 
-BRANCH NAME — The human-readable name of the branch or location. Examples: "Linden", "Green Valley Ranch", "Downers Grove South", "Harbor East". Often the second column. May be blank or missing in some formats.
+ADDRESS — two possibilities, pick one:
+  A) SEPARATE: street address in one col, city in another, state (2 letters) in another, zip (5 digits) in another → set colAddr, colCity, colState, colZip
+  B) COMBINED: one column contains full address like "13600 Colorado Blvd, Thornton, CO, 80602" or "509 S Exeter St, Baltimore, MD 21202" → set colFullAddr to that index, leave colAddr/colCity/colState/colZip as ""
 
-STREET ADDRESS — The street address ONLY, no city/state/zip. Examples: "2700 Cleveland Ave", "835 S Randall Rd", "1939 W 25th St", "509 S Exeter St". This is NEVER a combined string like "2700 Cleveland Ave, Columbus, OH, 43211" — that would be a duplicate/full address column to skip.
+DATE: Scheduled date like "04/06/26", "3/30/2026", "03/24/26". Use "" if absent. Never use quarter codes like "1H2026".
 
-CITY — City name only. Examples: "Columbus", "Elgin", "Chicago", "Kalamazoo", "Forestville".
+ALWAYS IGNORE these column types: region/timezone strings, quarter codes (1H2026), true/false booleans, status words (Scheduled/Pending), service lists, duplicate combined address strings.
 
-STATE — Exactly 2 uppercase letters. Examples: "OH", "IL", "CO", "TX", "MD", "FL".
-
-ZIP — 5-digit zip code. Examples: "43211", "60123", "80021", "20747". Skip if not present.
-
-DATE — A scheduled date if present. Format like "03/24/26", "4/2/2026", "3/30/2026". Often missing — return "" if not found. Do NOT use quarter codes like "1H2026" as a date.
-
-COLUMNS TO ALWAYS SKIP (never assign these to any field):
-- Region/timezone strings like "1 - Eastern", "3 - Mountain", "Central"
-- Quarter codes like "1H2026", "2H2025"
-- Boolean values: "true", "false"  
-- Status words: "Scheduled", "Pending", "Active"
-- Full combined address strings that include city+state+zip together
-- Service/scope lists like "Network Cabinet", "Physical Security"
-- Any column that duplicates information already mapped to another field
-
-Now reason through it step by step, then return ONLY this JSON (no markdown, no explanation):
-{"name":"<short descriptive name>","delim":"${delimLabel}","signal":"<one sentence: what makes this format detectable>","colCode":"<index or empty string>","colBranch":"<index or empty string>","colAddr":"<index or empty string>","colCity":"<index or empty string>","colState":"<index or empty string>","colZip":"<index or empty string>","colDate":"<index or empty string>"}`;
+Return ONLY this JSON with no explanation and no markdown:
+{"name":"short descriptive name","delim":"${delimLabel}","signal":"one sentence detection signal","colCode":"","colBranch":"","colAddr":"","colCity":"","colState":"","colZip":"","colDate":"","colFullAddr":""}`;
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -73,7 +59,7 @@ Now reason through it step by step, then return ONLY this JSON (no markdown, no 
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 800,
+        max_tokens: 600,
         messages: [{ role: "user", content: prompt }]
       })
     });
@@ -87,12 +73,9 @@ Now reason through it step by step, then return ONLY this JSON (no markdown, no 
 
     const data = JSON.parse(rawText);
     const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
-
-    // Extract JSON from response — handle any surrounding text
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("AI did not return valid JSON");
     const parsed = JSON.parse(jsonMatch[0]);
-
     return res.status(200).json(parsed);
 
   } catch (err) {
