@@ -558,7 +558,7 @@ export default function App() {
       });
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || `Server error ${response.status}`);
+        throw new Error(err.detail || err.error || `Server error ${response.status}`);
       }
       const parsed = await response.json();
       setParserForm(prev => ({ ...prev, ...parsed, sampleData: prev.sampleData }));
