@@ -12,10 +12,10 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured on server" });
+    return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured — add it in Vercel environment variables" });
   }
 
-  const { sampleData } = req.body;
+  const { sampleData } = req.body || {};
   if (!sampleData?.trim()) {
     return res.status(400).json({ error: "sampleData required" });
   }
@@ -29,8 +29,8 @@ export default async function handler(req, res) {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 512,
         messages: [{
           role: "user",
           content: `You are a data parser expert. Analyze this pasted spreadsheet data and determine the column mapping for a FieldNation work order generator.
@@ -49,29 +49,23 @@ Sample data:
 ${sampleData.trim().slice(0, 800)}
 \`\`\`
 
-Respond with ONLY valid JSON in this exact format, no explanation:
-{
-  "name": "descriptive name for this format",
-  "delim": "tab" or "comma",
-  "signal": "brief description of how to detect this format",
-  "colCode": column index as string (0-based) or "" if not found,
-  "colBranch": column index as string or "",
-  "colAddr": column index as string or "",
-  "colCity": column index as string or "",
-  "colState": column index as string or "",
-  "colZip": column index as string or "",
-  "colDate": column index as string or ""
-}`
+Respond with ONLY valid JSON, no explanation, no markdown:
+{"name":"descriptive name","delim":"tab or comma","signal":"how to detect this format","colCode":"0","colBranch":"1","colAddr":"2","colCity":"3","colState":"4","colZip":"5","colDate":""}`
         }]
       })
     });
 
+    const rawText = await response.text();
+
     if (!response.ok) {
-      const err = await response.text();
-      return res.status(502).json({ error: "Anthropic API error", detail: err });
+      console.error("Anthropic error:", response.status, rawText);
+      return res.status(502).json({
+        error: `Anthropic returned ${response.status}`,
+        detail: rawText.slice(0, 300)
+      });
     }
 
-    const data = await response.json();
+    const data = JSON.parse(rawText);
     const text = (data.content || [])
       .filter(b => b.type === "text")
       .map(b => b.text)
@@ -82,6 +76,7 @@ Respond with ONLY valid JSON in this exact format, no explanation:
     return res.status(200).json(parsed);
 
   } catch (err) {
+    console.error("ai.js error:", err);
     return res.status(500).json({ error: err.message });
   }
 }
