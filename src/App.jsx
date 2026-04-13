@@ -219,6 +219,32 @@ const JOKES = [
   "Why was the work order so emotional? It had too many unresolved dependencies.",
   "The tech showed up 3 days in a row. On day 3 he said 'I think I live here now.'",
   "Why don't IT guys go outside? Because there are no tech trees.",
+  "Jordan told the tech to 'just follow the WO'. The tech followed it to a Starbucks. No regrets.",
+  "A BRK tech, a DEL tech, and an INT tech walk into a bank. The manager says 'which one of you is the lead?' They all point at each other.",
+  "The work order said 'arrive between 8am and 5pm.' The tech showed up at 4:59. Technically.",
+  "Site survey complete. Address verified. Tech routed. CSV downloaded. Jordan: 'wait can we add one more site.'",
+  "Why did Chris Pratt name the tool after himself? He didn't. We just needed someone to blame.",
+  "The DEL tech delivered the equipment. The INT tech installed it. The LVL tech took the credit.",
+  "FieldNation: where 'scheduled start time' is more of a suggestion.",
+  "Error 404: Tech motivation not found. Have you tried turning the pay rate off and on again?",
+];
+
+const EASTER_EGGS = [
+  "🎉 KONAMI CODE ACTIVATED — You found it. Unfortunately this unlocks nothing. Good hustle though.",
+  "☕ COFFEE BREAK MODE — Productivity temporarily suspended. Please hydrate.",
+  "🏆 100 SITES PARSED — That's a lot of branches. Your wrists deserve a raise.",
+  "🎸 IT'S FRIDAY — Deploy on Fridays. Live dangerously. Jordan said it's fine.",
+  "🤙 CHRIS PRATT APPROVES — Star-Lord has reviewed your work order and finds it acceptable.",
+  "🔥 ON A ROLL — 5 jobs generated today. The FieldNation servers felt that.",
+];
+
+const AFFIRMATIONS = [
+  "Work order game strong 💪",
+  "Deploying like a pro 🚀",
+  "CSV go brrr 📊",
+  "Bundle life 🔗",
+  "Template ID secured ✅",
+  "Sites verified. Let's get it 🏙️",
 ];
 
 const LOGO_IMG = "/9j/4AAQSkZJRgABAQAASABIAAD/4QBMRXhpZgAATU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAKKADAAQAAAABAAAALQAAAAD/7QA4UGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAAAA4QklNBCUAAAAAABDUHYzZjwCyBOmACZjs+EJ+/8AAEQgALQAoAwEiAAIRAQMRAf/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKC//EALURAAIBAgQEAwQHBQQEAAECdwABAgMRBAUhMQYSQVEHYXETIjKBCBRCkaGxwQkjM1LwFWJy0QoWJDThJfEXGBkaJicoKSo1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoKDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/bAEMAAQEBAQEBAgEBAgMCAgIDBAMDAwMEBgQEBAQEBgcGBgYGBgYHBwcHBwcHBwgICAgICAkJCQkJCwsLCwsLCwsLC//bAEMBAgICAwMDBQMDBQsIBggLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLC//dAAQAA//aAAwDAQACEQMRAD8A/p0/aW/bN8DfAEHQLRP7W8QypuSzifCxg9GlbnaD2GCx9Mc1+SPjj9tf9pHx/dvKNcbSLZiSsGnL5IXP+3zIf++/yr4+vfEWr+JdauNe124e7vLyRpZppTud3Y5JJr5+/ab+MPiL4Z+DINO8CxK+uawXitnbG2EIMtIQeuMjHvUVMR9q+h1U6dSrNQgtWfeUf7R3xp0C7S4m8d6rFKzAKJ7+R1JPQbZGI59MV9hfCD/gop8VPC9zFZ/EtE8Q6ccbp41WK5Ueo24R/oQCf71fxweH/gX8Tfir4xXXPFeuXF/qE8pMs0rluvG1R/CvsuBX64/ATTPih8Kruy+FnxBH2vT7iInTrvpgIMmM8flmueljqU58sZ6nq4nIsfhqXtpwdkf2f/Db4oeDvix4Yg8WeC7xbq0nHY4ZGHVXUnKsO4Nd/ke3+fxr+dD9mL43ar8C/iJDdPO39i6g6xahD1XaeBIBnhkznPdciv1T/wCG4fgn/wBBMf8AfJ/xr0FPucMK8WtdGf/Q6Gy3K3zda+N/2v8AxBYaZe6S94cC2gmlbHJAcgDA99p/KvpvTPFNpNJhmHNfHH7ZmoWFgtvr15GJ4Xtmix7qxP8AWvKxMv3TsfT8O04SxsOZ23f4E/7KHiDQfHGqXeqaFfKtvpObm9Lr80UMYyzH6f1r9n3fwJ49+Eth4z8NzC+FvOvlS7cHpjIHp71+K/8AwTdtfDWr+MdQt72OGKK706eHyGXIuWm28DscDk544r9h/hFpGl+GP2f9ZjuLgi+ivPsbQKFCQhW+UDbxgjn1ryaMHGtFqPVH6NmtqmBqc9RfC72MDiQZNJ5a/wCRVezm3qTnirm9a+sPxJn/0fzL8c/tZfDHwZqD2s2vWoMRO7ZIJDkdsLk18p/F/wDbl+HfxNtLPwPpST3txLcBROV2RopBz15OeOMV82/8FKP2f/Dnw116H4t+FbqaF/EN5It3aEkp57Au0qsTkbjncuCMnII6V+Z3hi5vZdYtFWeRDJKFyGORnv17Vyyw+jR6WFxXsqkZrdM/qe/YM8ZaroWo+a8m3RpvMRnMvlRxAY3FiOVHTjPNejeMf+ClPwX8BfGNvgfoM8MHhCAPcXmqLufzdQcgcBcnYAMZwa/mO1z4p/ELRdOktbbWb3aSUwLh1Hp0zXgM+s6vdTGWe5kZnPJLE9fxrlwuH97nex9HnOcutSVCKtfc/wBAL9mDxT4Z/aX8Xaf4a+F+r2urC7YGV7aQOYYRy7uvVcDpuA5wO9fqR/wwrqH/AEFj/wB8r/jX8q37Bvw01H9lXwcms/DPxFqdprWtwRvfahbXElrLKpG5Yx5bjbGpPC5OTySeMfoX/wANI/tHf9FB8S/+Da6/+O16TkfJqnH7R//Z";
@@ -275,6 +301,31 @@ export default function App() {
   const fileInputRef = useRef(null);
   const inputRefs = useRef({});
   const [dark, setDark] = useState(() => { try { return sessionStorage.getItem("cpwog_dark") === "1"; } catch { return false; } });
+
+  // Easter egg: konami code listener
+  useEffect(() => {
+    const handler = (e) => {
+      konamiRef.current = [...konamiRef.current, e.key].slice(-10);
+      if (konamiRef.current.join(",") === konamiCode.join(",")) {
+        setEasterEgg(EASTER_EGGS[0]);
+        setTimeout(() => setEasterEgg(null), 4000);
+        konamiRef.current = [];
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Friday mode
+  useEffect(() => {
+    const day = new Date().getDay();
+    if (day === 5 && authed) {
+      setTimeout(() => {
+        setEasterEgg(EASTER_EGGS[3]);
+        setTimeout(() => setEasterEgg(null), 5000);
+      }, 3000);
+    }
+  }, [authed]);
 
   // Track previous woConfig to detect which fields changed
   const prevConfigRef = useRef(woConfig);
@@ -347,6 +398,12 @@ export default function App() {
   const [jobHistory, setJobHistory] = useState([]);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   const [showParserPanel, setShowParserPanel] = useState(false);
+  const [easterEgg, setEasterEgg] = useState(null);
+  const [logoClickCount, setLogoClickCount] = useState(0);
+  const [aiParserLoading, setAiParserLoading] = useState(false);
+  const [aiParserError, setAiParserError] = useState("");
+  const konamiRef = useRef([]);
+  const konamiCode = ["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
   const [customParsers, setCustomParsers] = useState([]);
   const [editingParser, setEditingParser] = useState(null);
   const [parserForm, setParserForm] = useState({ name: "", delim: "tab", signal: "", sampleData: "", colCode: "0", colBranch: "1", colAddr: "2", colCity: "3", colState: "4", colZip: "5", colDate: "" });
@@ -484,6 +541,66 @@ export default function App() {
       })
       .then(rows => { if (rows?.[0]) setJobHistory(prev => [rows[0], ...prev].slice(0, 100)); })
       .catch(e => console.error("saveJob network error:", e));
+  };
+
+  const generateParserWithAI = async () => {
+    if (!parserForm.sampleData?.trim()) {
+      setAiParserError("Paste some sample data first so the AI can analyze it.");
+      return;
+    }
+    setAiParserLoading(true);
+    setAiParserError("");
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [{
+            role: "user",
+            content: `You are a data parser expert. Analyze this pasted spreadsheet data and determine the column mapping for a FieldNation work order generator.
+
+The fields we need to extract are:
+- code: building/site code (short alphanumeric like FB01, B015, X382)
+- branchName: branch or location name
+- address: street address
+- city: city name
+- state: 2-letter state code
+- zip: 5-digit zip code
+- date: scheduled date (MM/DD/YYYY or similar)
+
+Sample data:
+\`\`\`
+${parserForm.sampleData.trim().slice(0, 800)}
+\`\`\`
+
+Respond with ONLY valid JSON in this exact format, no explanation:
+{
+  "name": "descriptive name for this format",
+  "delim": "tab" or "comma",
+  "signal": "brief description of how to detect this format",
+  "colCode": column index as string (0-based) or "" if not found,
+  "colBranch": column index as string or "",
+  "colAddr": column index as string or "",
+  "colCity": column index as string or "",
+  "colState": column index as string or "",
+  "colZip": column index as string or "",
+  "colDate": column index as string or ""
+}`
+          }]
+        })
+      });
+      const data = await response.json();
+      const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+      const clean = text.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(clean);
+      setParserForm(prev => ({ ...prev, ...parsed, sampleData: prev.sampleData }));
+      runParserPreview({ ...parserForm, ...parsed });
+    } catch (e) {
+      setAiParserError("AI parse failed: " + e.message + " — fill in columns manually.");
+    }
+    setAiParserLoading(false);
   };
 
   const saveCustomParsers = (next) => {
@@ -1001,7 +1118,11 @@ export default function App() {
     if (parsed.length === 0) { setPasteError("Could not parse any rows. Make sure you copied headers too."); return; }
     setSites(prev => {
       const existing = prev.filter(s => s.code || s.address || s.branchName);
-      return existing.length > 0 ? [...existing, ...parsed] : parsed;
+      const next = existing.length > 0 ? [...existing, ...parsed] : parsed;
+      if (next.length >= 100) {
+        setTimeout(() => { setEasterEgg(EASTER_EGGS[2]); setTimeout(() => setEasterEgg(null), 4000); }, 300);
+      }
+      return next;
     });
     setPasteMode(false);
     setPasteText("");
@@ -1278,7 +1399,14 @@ export default function App() {
       {/* Header */}
       <div style={{ background: T.header, borderBottom: `2px solid ${T.accent}`, padding: "0 2rem" }}>
         <div style={{ maxWidth: 960, margin: "0 auto", display: "flex", alignItems: "center", gap: 14, padding: "1.1rem 0" }}>
-          <img src={`data:image/png;base64,${LOGO_IMG}`} alt="Logo" style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: `2px solid ${T.accent}` }} />
+          <img src={`data:image/png;base64,${LOGO_IMG}`} alt="Logo"
+              onClick={() => {
+                const n = logoClickCount + 1;
+                setLogoClickCount(n);
+                if (n === 5) { setEasterEgg(EASTER_EGGS[4]); setTimeout(() => setEasterEgg(null), 4000); setLogoClickCount(0); }
+                else if (n === 3) { setEasterEgg("☕ " + AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)]); setTimeout(() => setEasterEgg(null), 2500); }
+              }}
+              style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: `2px solid ${T.accent}`, cursor: "pointer" }} />
           <div>
             <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accent, lineHeight: 1 }}>CHRIS PRATT WORK ORDER GENERATOR</div>
             <div style={{ fontSize: 10, color: T.textFaint, letterSpacing: 1.5, marginTop: 2 }}>Automated FieldNation CSV Upload</div>
@@ -2170,7 +2298,13 @@ export default function App() {
                       placeholder={"Paste sample rows here to preview how they'll parse..."}
                       style={{ width: "100%", background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "8px 12px", color: T.text, fontSize: 11, fontFamily: "inherit", height: 100, resize: "vertical", lineHeight: 1.6, marginBottom: 8 }}
                     />
-                    <button onClick={() => runParserPreview(parserForm)} style={{ width: "100%", padding: "7px", borderRadius: 7, border: `1px solid ${T.border2}`, background: T.surface2, color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", marginBottom: 8 }}>▶ Preview Parse</button>
+                    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                      <button onClick={() => runParserPreview(parserForm)} style={{ flex: 1, padding: "7px", borderRadius: 7, border: `1px solid ${T.border2}`, background: T.surface2, color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>▶ Preview Parse</button>
+                      <button onClick={generateParserWithAI} disabled={aiParserLoading || !parserForm.sampleData?.trim()} style={{ flex: 1, padding: "7px", borderRadius: 7, border: "none", background: aiParserLoading ? T.disabledBg : "linear-gradient(135deg,#7c3aed,#5b21b6)", color: aiParserLoading ? T.disabledText : "#fff", cursor: aiParserLoading || !parserForm.sampleData?.trim() ? "not-allowed" : "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                        {aiParserLoading ? "⏳ Analyzing..." : "✨ AI Detect"}
+                      </button>
+                    </div>
+                    {aiParserError && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8 }}>⚠ {aiParserError}</div>}
 
                     {parserPreviewError && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8 }}>⚠ {parserPreviewError}</div>}
                     {parserPreview.length > 0 && (
@@ -2401,6 +2535,14 @@ export default function App() {
           </div>
         )}
 
+        {/* Easter egg toast */}
+        {easterEgg && (
+          <div style={{ position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)", background: "linear-gradient(135deg,#1e1b4b,#312e81)", border: "1px solid #7c3aed", borderRadius: 12, padding: "14px 24px", color: "#e0e7ff", fontSize: 14, fontFamily: "inherit", zIndex: 9999, maxWidth: 420, textAlign: "center", boxShadow: "0 8px 32px rgba(124,58,237,0.4)", animation: "none" }}
+            onClick={() => setEasterEgg(null)}>
+            {easterEgg}
+          </div>
+        )}
+
         {/* Admin lock/unlock modal */}
         {showLockModal && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -2603,4 +2745,3 @@ export default function App() {
     </div>
   );
 }
-
