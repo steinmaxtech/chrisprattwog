@@ -308,7 +308,7 @@ export default function App() {
       konamiRef.current = [...konamiRef.current, e.key].slice(-10);
       if (konamiRef.current.join(",") === konamiCode.join(",")) {
         setEasterEgg(EASTER_EGGS[0]);
-        setTimeout(() => setEasterEgg(null), 4000);
+        setTimeout(() => setEasterEgg(null), 10000);
         konamiRef.current = [];
       }
     };
@@ -322,7 +322,7 @@ export default function App() {
     if (day === 5 && authed) {
       setTimeout(() => {
         setEasterEgg(EASTER_EGGS[3]);
-        setTimeout(() => setEasterEgg(null), 5000);
+        setTimeout(() => setEasterEgg(null), 10000);
       }, 3000);
     }
   }, [authed]);
@@ -551,50 +551,16 @@ export default function App() {
     setAiParserLoading(true);
     setAiParserError("");
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{
-            role: "user",
-            content: `You are a data parser expert. Analyze this pasted spreadsheet data and determine the column mapping for a FieldNation work order generator.
-
-The fields we need to extract are:
-- code: building/site code (short alphanumeric like FB01, B015, X382)
-- branchName: branch or location name
-- address: street address
-- city: city name
-- state: 2-letter state code
-- zip: 5-digit zip code
-- date: scheduled date (MM/DD/YYYY or similar)
-
-Sample data:
-\`\`\`
-${parserForm.sampleData.trim().slice(0, 800)}
-\`\`\`
-
-Respond with ONLY valid JSON in this exact format, no explanation:
-{
-  "name": "descriptive name for this format",
-  "delim": "tab" or "comma",
-  "signal": "brief description of how to detect this format",
-  "colCode": column index as string (0-based) or "" if not found,
-  "colBranch": column index as string or "",
-  "colAddr": column index as string or "",
-  "colCity": column index as string or "",
-  "colState": column index as string or "",
-  "colZip": column index as string or "",
-  "colDate": column index as string or ""
-}`
-          }]
-        })
+        body: JSON.stringify({ sampleData: parserForm.sampleData.trim().slice(0, 800) })
       });
-      const data = await response.json();
-      const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
-      const clean = text.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Server error ${response.status}`);
+      }
+      const parsed = await response.json();
       setParserForm(prev => ({ ...prev, ...parsed, sampleData: prev.sampleData }));
       runParserPreview({ ...parserForm, ...parsed });
     } catch (e) {
@@ -1120,7 +1086,7 @@ Respond with ONLY valid JSON in this exact format, no explanation:
       const existing = prev.filter(s => s.code || s.address || s.branchName);
       const next = existing.length > 0 ? [...existing, ...parsed] : parsed;
       if (next.length >= 100) {
-        setTimeout(() => { setEasterEgg(EASTER_EGGS[2]); setTimeout(() => setEasterEgg(null), 4000); }, 300);
+        setTimeout(() => { setEasterEgg(EASTER_EGGS[2]); setTimeout(() => setEasterEgg(null), 10000); }, 300);
       }
       return next;
     });
@@ -1403,8 +1369,8 @@ Respond with ONLY valid JSON in this exact format, no explanation:
               onClick={() => {
                 const n = logoClickCount + 1;
                 setLogoClickCount(n);
-                if (n === 5) { setEasterEgg(EASTER_EGGS[4]); setTimeout(() => setEasterEgg(null), 4000); setLogoClickCount(0); }
-                else if (n === 3) { setEasterEgg("☕ " + AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)]); setTimeout(() => setEasterEgg(null), 2500); }
+                if (n === 5) { setEasterEgg(EASTER_EGGS[4]); setTimeout(() => setEasterEgg(null), 10000); setLogoClickCount(0); }
+                else if (n === 3) { setEasterEgg("☕ " + AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)]); setTimeout(() => setEasterEgg(null), 10000); }
               }}
               style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: `2px solid ${T.accent}`, cursor: "pointer" }} />
           <div>
