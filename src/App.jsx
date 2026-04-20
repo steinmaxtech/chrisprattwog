@@ -409,6 +409,9 @@ export default function App() {
   const [librarySaveName, setLibrarySaveName] = useState("");
   const [showSaveLibrary, setShowSaveLibrary] = useState(false);
   const [librarySearch, setLibrarySearch] = useState("");
+  const [libSelected, setLibSelected] = useState(new Set()); // Set of "entryId:siteIdx"
+  const [libExpanded, setLibExpanded] = useState(new Set()); // Set of entry IDs
+  const [libLastClick, setLibLastClick] = useState(null); // {entryId, idx} for shift-select
   const [easterEgg, setEasterEgg] = useState(null);
   const [logoClickCount, setLogoClickCount] = useState(0);
   const [aiParserLoading, setAiParserLoading] = useState(false);
@@ -2402,45 +2405,132 @@ export default function App() {
         )}
 
         {/* ── Site Library Panel ──────────────────────────────────────────────── */}
-        {showLibraryPanel && (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 400, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }} onClick={() => setShowLibraryPanel(false)}>
-            <div style={{ background: T.surface, borderLeft: `2px solid ${T.accent}`, height: "100%", width: "100%", maxWidth: 460, overflowY: "auto", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
-              <div style={{ padding: "1.25rem 1.5rem", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, background: T.surface, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        {showLibraryPanel && (() => {
+          const filteredLib = siteLibrary.filter(l => !librarySearch.trim() || (l.project_name||"").toLowerCase().includes(librarySearch.toLowerCase()) || (l.sites||[]).some(s => (s.code||"").toLowerCase().includes(librarySearch.toLowerCase()) || (s.branchName||"").toLowerCase().includes(librarySearch.toLowerCase())));
+          const selCount = libSelected.size;
+          const addSelected = () => {
+            const toAdd = [];
+            libSelected.forEach(key => {
+              const [eid, sidx] = key.split(":");
+              const entry = siteLibrary.find(e => String(e.id) === eid);
+              if (entry?.sites?.[+sidx]) toAdd.push(entry.sites[+sidx]);
+            });
+            const loaded = toAdd.map(s => ({ ...EMPTY_SITE(), ...s, numTechs: woConfig.numTechs||"1", numDays: woConfig.numDays||"1", date: s.date||woConfig.defaultDate||"", verified: null, verifying: false, verifyError: "" }));
+            setSites(prev => { const ex = prev.filter(s => s.code||s.address||s.branchName); return ex.length > 0 ? [...ex, ...loaded] : loaded; });
+            setLibSelected(new Set()); setShowLibraryPanel(false);
+          };
+          return (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 400, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }} onClick={() => { setShowLibraryPanel(false); setLibSelected(new Set()); }}>
+            <div style={{ background: T.surface, borderLeft: `2px solid ${T.accent}`, height: "100%", width: "100%", maxWidth: 480, display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div style={{ padding: "1.25rem 1.5rem", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, background: T.surface, zIndex: 2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
                   <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accentHi }}>🏗 SITE LIBRARY</div>
-                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 2 }}>Saved site lists — load into current job</div>
+                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 2 }}>Check sites to select · Shift+click for range · Ctrl+click individual</div>
                 </div>
-                <button onClick={() => setShowLibraryPanel(false)} style={{ background: "transparent", border: "none", color: T.textMid, cursor: "pointer", fontSize: 20 }}>✕</button>
+                <button onClick={() => { setShowLibraryPanel(false); setLibSelected(new Set()); }} style={{ background: "transparent", border: "none", color: T.textMid, cursor: "pointer", fontSize: 20 }}>✕</button>
               </div>
-              <div style={{ padding: "0.75rem 1.5rem", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 58, background: T.surface, zIndex: 1 }}>
-                <input placeholder="Search projects..." value={librarySearch} onChange={e => setLibrarySearch(e.target.value)} style={{ ...T.inp, width: "100%" }} />
+
+              {/* Search */}
+              <div style={{ padding: "0.75rem 1.5rem", borderBottom: `1px solid ${T.border}`, background: T.surface }}>
+                <input placeholder="Search by project, code, or branch name..." value={librarySearch} onChange={e => setLibrarySearch(e.target.value)} style={{ ...T.inp, width: "100%" }} />
               </div>
-              <div style={{ flex: 1, padding: "1rem 1.5rem", display: "flex", flexDirection: "column", gap: 8 }}>
-                {siteLibrary.length === 0 && <div style={{ color: T.textFaint, fontSize: 13, textAlign: "center", marginTop: 30 }}>No saved site lists yet.<br/>Go to Add Sites → Edit Table → Save to Library.</div>}
-                {siteLibrary
-                  .filter(l => !librarySearch.trim() || (l.project_name || "").toLowerCase().includes(librarySearch.toLowerCase()))
-                  .map(entry => (
-                  <div key={entry.id} style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10, padding: "0.9rem 1rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                      <div>
-                        <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, color: T.accentHi }}>{entry.project_name}</div>
-                        <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>{entry.site_count} sites · {new Date(entry.created_at).toLocaleDateString()}</div>
+
+              {/* Project list */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "0.75rem 1.5rem", display: "flex", flexDirection: "column", gap: 8 }}>
+                {siteLibrary.length === 0 && <div style={{ color: T.textFaint, fontSize: 13, textAlign: "center", marginTop: 40 }}>No saved site lists yet.<br/>Go to Add Sites → Edit Table → 🏗 Save to Library.</div>}
+                {filteredLib.map(entry => {
+                  const eid = String(entry.id);
+                  const sites = entry.sites || [];
+                  const isExpanded = libExpanded.has(eid);
+                  const entryKeys = sites.map((_, i) => `${eid}:${i}`);
+                  const allSelected = entryKeys.length > 0 && entryKeys.every(k => libSelected.has(k));
+                  const someSelected = entryKeys.some(k => libSelected.has(k));
+                  const filteredSites = librarySearch.trim()
+                    ? sites.filter(s => (s.code||"").toLowerCase().includes(librarySearch.toLowerCase()) || (s.branchName||"").toLowerCase().includes(librarySearch.toLowerCase()) || (s.address||"").toLowerCase().includes(librarySearch.toLowerCase()))
+                    : sites;
+
+                  return (
+                    <div key={eid} style={{ background: T.surface2, border: `1px solid ${someSelected ? T.accent : T.border}`, borderRadius: 10, overflow: "hidden" }}>
+                      {/* Project header row */}
+                      <div style={{ padding: "0.75rem 1rem", display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                        {/* Select-all checkbox for this project */}
+                        <div onClick={e => { e.stopPropagation(); const next = new Set(libSelected); if (allSelected) entryKeys.forEach(k => next.delete(k)); else entryKeys.forEach(k => next.add(k)); setLibSelected(next); }}
+                          style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${allSelected ? T.accent : someSelected ? T.accent : T.border2}`, background: allSelected ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, position: "relative" }}>
+                          {allSelected && <span style={{ color: "#000", fontSize: 11, fontWeight: 700 }}>✓</span>}
+                          {someSelected && !allSelected && <div style={{ width: 8, height: 2, background: T.accent, borderRadius: 1 }} />}
+                        </div>
+                        {/* Project info — click to expand */}
+                        <div style={{ flex: 1 }} onClick={() => { const next = new Set(libExpanded); if (isExpanded) next.delete(eid); else next.add(eid); setLibExpanded(next); }}>
+                          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, letterSpacing: 1.5, color: someSelected ? T.accentHi : T.textMid }}>{entry.project_name}</div>
+                          <div style={{ fontSize: 10, color: T.textFaint }}>{sites.length} sites · {new Date(entry.created_at).toLocaleDateString()} {someSelected ? `· ${entryKeys.filter(k => libSelected.has(k)).length} selected` : ""}</div>
+                        </div>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <button onClick={e => { e.stopPropagation(); deleteFromLibrary(entry.id); }} style={{ background: "transparent", border: "1px solid #ef4444", borderRadius: 5, padding: "2px 7px", color: "#ef4444", cursor: "pointer", fontSize: 10 }}>✕</button>
+                          <span onClick={() => { const next = new Set(libExpanded); if (isExpanded) next.delete(eid); else next.add(eid); setLibExpanded(next); }} style={{ color: T.textFaint, cursor: "pointer", fontSize: 12 }}>{isExpanded ? "▾" : "▸"}</span>
+                        </div>
                       </div>
-                      <button onClick={() => deleteFromLibrary(entry.id)} style={{ background: "transparent", border: "1px solid #ef4444", borderRadius: 5, padding: "2px 8px", color: "#ef4444", cursor: "pointer", fontSize: 10, flexShrink: 0 }}>✕</button>
+
+                      {/* Site list — shown when expanded */}
+                      {isExpanded && (
+                        <div style={{ borderTop: `1px solid ${T.border}` }}>
+                          {filteredSites.map((site, fi) => {
+                            const realIdx = sites.indexOf(site);
+                            const key = `${eid}:${realIdx}`;
+                            const checked = libSelected.has(key);
+                            return (
+                              <div key={realIdx}
+                                onClick={e => {
+                                  const next = new Set(libSelected);
+                                  if (e.shiftKey && libLastClick && libLastClick.eid === eid) {
+                                    // Range select within this project
+                                    const from = Math.min(libLastClick.idx, realIdx);
+                                    const to = Math.max(libLastClick.idx, realIdx);
+                                    for (let i = from; i <= to; i++) next.add(`${eid}:${i}`);
+                                  } else {
+                                    if (checked) next.delete(key); else next.add(key);
+                                  }
+                                  setLibSelected(next);
+                                  setLibLastClick({ eid, idx: realIdx });
+                                }}
+                                style={{ padding: "7px 1rem 7px 2.5rem", display: "flex", alignItems: "center", gap: 10, cursor: "pointer", background: checked ? `${T.accent}10` : "transparent", borderBottom: `1px solid ${T.border}` }}
+                                onMouseEnter={e => e.currentTarget.style.background = checked ? `${T.accent}18` : T.rowHover}
+                                onMouseLeave={e => e.currentTarget.style.background = checked ? `${T.accent}10` : "transparent"}
+                              >
+                                <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${checked ? T.accent : T.border2}`, background: checked ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                  {checked && <span style={{ color: "#000", fontSize: 10, fontWeight: 700 }}>✓</span>}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <span style={{ fontSize: 12, color: checked ? T.accentHi : T.text, fontWeight: 600 }}>{site.code}</span>
+                                  {site.branchName && <span style={{ fontSize: 11, color: T.textDim, marginLeft: 8 }}>{site.branchName}</span>}
+                                  <div style={{ fontSize: 10, color: T.textFaint, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{site.address}, {site.city}, {site.state} {site.zip}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                    <div style={{ fontSize: 11, color: T.textFaint, marginBottom: 8 }}>
-                      {(entry.sites || []).slice(0, 3).map(s => s.code).join(", ")}{entry.site_count > 3 ? ` +${entry.site_count - 3} more` : ""}
-                    </div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => loadFromLibrary(entry)} style={{ flex: 1, padding: "7px", borderRadius: 7, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5 }}>↩ LOAD SITES</button>
-                      <button onClick={() => { setSites((entry.sites || []).map(s => ({ ...EMPTY_SITE(), ...s, numTechs: woConfig.numTechs||"1", numDays: woConfig.numDays||"1", date: woConfig.defaultDate||"", verified: null, verifying: false, verifyError: "" }))); setShowLibraryPanel(false); }} style={{ flex: 1, padding: "7px", borderRadius: 7, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontFamily: "inherit", fontSize: 11 }}>Replace all</button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+
+              {/* Sticky footer */}
+              <div style={{ padding: "1rem 1.5rem", borderTop: `1px solid ${T.border}`, background: T.surface, display: "flex", gap: 8 }}>
+                <button onClick={() => { setLibSelected(new Set()); }} style={{ padding: "10px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>Clear</button>
+                <button
+                  disabled={selCount === 0}
+                  onClick={addSelected}
+                  style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: selCount > 0 ? `linear-gradient(135deg,${T.accent},#dc6209)` : T.disabledBg, color: selCount > 0 ? "#000" : T.disabledText, cursor: selCount > 0 ? "pointer" : "not-allowed", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}>
+                  {selCount > 0 ? `↩ ADD ${selCount} SITE${selCount > 1 ? "S" : ""}` : "SELECT SITES ABOVE"}
+                </button>
+              </div>
+
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* ── Parser Panel ─────────────────────────────────────────────── */}
         {showParserPanel && (
@@ -2993,4 +3083,3 @@ export default function App() {
     </div>
   );
 }
-
