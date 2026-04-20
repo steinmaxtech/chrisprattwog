@@ -1593,7 +1593,8 @@ export default function App() {
               </button>
             </div>
 
-            {guidedMode ? (
+            {(() => {
+              if (guidedMode) return (
               /* ── GUIDED MODE ─────────────────────────────────────────── */
               <div style={{display:"contents"}}>
                 {/* Template picker — shown first if templates exist */}
@@ -1693,8 +1694,8 @@ export default function App() {
                   <div style={{ fontSize: 11, color: T.textFaint, marginTop: 10 }}>Configure pricing and template IDs for companion orders in Advanced Mode if needed.</div>
                 </div>
                 </div>
-            ) : (
-              /* ── ADVANCED MODE ─────────────────────────────────────── */
+              );
+              return (
               <div style={{display:"contents"}}>
                 <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
                   <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Project ID</label>
@@ -2069,11 +2070,12 @@ export default function App() {
                         </div>
                       </div>
                     )}
-                </div>{/* /companion-wrapper */}
-              </div>{/* /woType-config */}
-            </div>{/* /advanced-mode */}
-            )}
-          </div>{/* /step0-grid */}
+                </div>
+              </div>
+            </div>
+              );
+            })()}
+          </div>
         )}
 
         {/* STEP 1: Add Sites */}
