@@ -1516,7 +1516,6 @@ export default function App() {
               </button>
             </div>
               /* ── GUIDED MODE ─────────────────────────────────────────── */
-              <div style={{display:"contents"}}>
                 {/* Template picker — shown first if templates exist */}
                 {woTemplates.length > 0 && (
                   <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
@@ -1579,6 +1578,11 @@ export default function App() {
                           </div>
                           {woType === key && <div style={{ fontSize: 18 }}>✓</div>}
                         </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
           </div>
         )}
 
@@ -1590,7 +1594,6 @@ export default function App() {
                 ✦ Switch to Guided Mode
               </button>
             </div>
-              <div style={{display:"contents"}}>
                 <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
                   <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Project ID</label>
                   <div style={{ position: "relative" }}>
@@ -1966,10 +1969,6 @@ export default function App() {
                 </div>
               </div>
             </div>
-              );
-            })()}
-          </div>
-        )}
           </div>
         )}
 
