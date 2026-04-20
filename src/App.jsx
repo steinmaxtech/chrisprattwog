@@ -2069,10 +2069,10 @@ export default function App() {
                       </div>
                     )}
                 </>
+              </div>
               </>
-            </div>
-            </div>
-          )}
+            )}
+          </div>
         )}
 
         {/* STEP 1: Add Sites */}
