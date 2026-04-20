@@ -40,6 +40,7 @@ export default function Step0Guided({ T, woType, setWoType, setWoConfig, WO_DEFA
                         ))}
                       </div>
                     )}
+                  {null}
                   </div>
                 </div>
 
@@ -74,8 +75,6 @@ export default function Step0Guided({ T, woType, setWoType, setWoConfig, WO_DEFA
                     })}
                   </div>
                 </div>
-
-          </div>
-    </div>
+              </div>
   );
 }

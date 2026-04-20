@@ -380,77 +380,10 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
                         </div>
                       </div>
                     )}
+                {null}
                 </div>
               </div>
             </div>
-          </div>
         )}
-
-
-  return (
-    <div style={{ fontFamily: "'DM Mono','Courier New',monospace", background: T.bg, minHeight: "100vh", color: T.text }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Bebas+Neue&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        .tab-btn { background: transparent; border: none; padding: 10px 16px; color: ${T.tabInactive}; cursor: pointer; font-size: 12px; font-family: inherit; border-bottom: 2px solid transparent; transition: all .15s; }
-        .tab-btn:hover { color: ${T.tabHover}; }
-        .tab-btn.active { color: ${T.tabActive}; border-bottom-color: ${T.tabActive}; }
-        .wo-card { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; border: 1.5px solid ${T.border}; background: ${T.surface}; cursor: pointer; transition: all .15s; }
-        .wo-card:hover { border-color: ${T.accent}; }
-        .wo-card.selected { border-color: ${T.accent}; background: ${T.cardSel}; }
-      `}</style>
-
-      {/* Header */}
-      <div style={{ background: T.header, borderBottom: `2px solid ${T.accent}`, padding: "0 2rem", position: "sticky", top: 0, zIndex: 50 }}>
-        <div style={{ maxWidth: 960, margin: "0 auto", display: "flex", alignItems: "center", gap: 14, padding: "1.1rem 0" }}>
-          <img src={`data:image/png;base64,${LOGO_IMG}`} alt="Logo"
-            onClick={() => {
-              const n = logoClickCount + 1;
-              setLogoClickCount(n);
-              if (n === 5) { setEasterEgg(EASTER_EGGS[4]); setTimeout(() => setEasterEgg(null), 10000); setLogoClickCount(0); }
-              else if (n === 3) { setEasterEgg("☕ " + AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)]); setTimeout(() => setEasterEgg(null), 10000); }
-            }}
-            style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: `2px solid ${T.accent}`, cursor: "pointer" }} />
-          <div>
-            <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accent, lineHeight: 1 }}>CHRIS PRATT WORK ORDER GENERATOR</div>
-            <div style={{ fontSize: 10, color: T.textFaint, letterSpacing: 1.5, marginTop: 2 }}>Automated FieldNation CSV Upload</div>
-          </div>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
-            {STEP_LABELS.map((label, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <div style={{ width: 26, height: 26, borderRadius: "50%", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: i < step ? T.accent : i === step ? "transparent" : T.surface, color: i < step ? "#000" : i === step ? T.accent : T.textFaint, border: i === step ? `2px solid ${T.accent}` : "2px solid transparent", transition: "all .2s" }}>{i < step ? "✓" : i + 1}</div>
-                {i < STEP_LABELS.length - 1 && <div style={{ width: 20, height: 1, background: i < step ? T.accent : T.border }} />}
-              </div>
-            ))}
-            <button onClick={() => setDark(d => !d)} style={{ marginLeft: 12, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, transition: "all .15s" }}>
-              {dark ? "☀ Light" : "🌙 Dark"}
-            </button>
-            {adminUnlocked && <button onClick={() => setShowTemplatePanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>📋 Templates{woTemplates.length > 0 ? ` (${woTemplates.length})` : ""}</button>}
-            <button onClick={() => setShowLibraryPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>🏗 Library{siteLibrary.length > 0 ? ` (${siteLibrary.length})` : ""}</button>
-            {adminUnlocked && <button onClick={() => setShowParserPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>⚙ Parsers</button>}
-            <button onClick={() => setShowHistoryPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>
-              📋 History{jobHistory.length > 0 ? ` (${jobHistory.length})` : ""}
-            </button>
-            <button
-              onClick={() => { if (adminUnlocked) { setAdminUnlocked(false); } else { setLockPwInput(""); setLockPwError(false); setShowLockModal(true); } }}
-              style={{ background: adminUnlocked ? "rgba(234,88,12,0.15)" : "transparent", border: `1px solid ${adminUnlocked ? T.accent : T.border2}`, borderRadius: 20, padding: "5px 12px", color: adminUnlocked ? T.accent : T.textMid, cursor: "pointer", fontSize: 15, display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>
-              {adminUnlocked ? "🔓" : "🔒"}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: 960, margin: "0 auto", padding: "2rem" }}>
-        {/* Step title */}
-        <div style={{ marginBottom: "1.25rem" }}>
-          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 30, letterSpacing: 2 }}>
-            <span style={{ color: T.accent }}>0{step + 1} / </span>
-            <span style={{ color: T.text }}>{STEP_LABELS[step]}</span>
-          </div>
-          <div style={{ height: 2, width: 48, background: T.accent, marginTop: 6, borderRadius: 2 }} />
-        </div>
-
-
-    </div>
   );
 }
