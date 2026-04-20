@@ -2069,11 +2069,11 @@ export default function App() {
                         </div>
                       </div>
                     )}
-                </div>
-              </div>
-              </div>
+                </div>{/* /companion-wrapper */}
+              </div>{/* /woType-config */}
+            </div>{/* /advanced-mode */}
             )}
-          </div>
+          </div>{/* /step0-grid */}
         )}
 
         {/* STEP 1: Add Sites */}
