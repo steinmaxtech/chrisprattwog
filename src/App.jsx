@@ -1691,7 +1691,8 @@ export default function App() {
                     ))}
                   </div>
                   <div style={{ fontSize: 11, color: T.textFaint, marginTop: 10 }}>Configure pricing and template IDs for companion orders in Advanced Mode if needed.</div>
-                </div></div>
+                </div>
+                </div>
             ) : (
               /* ── ADVANCED MODE ─────────────────────────────────────── */
               <div style={{display:"contents"}}>
@@ -2069,7 +2070,8 @@ export default function App() {
                       </div>
                     )}
                 </div>
-              </div></div>
+              </div>
+              </div>
             )}
           </div>
         )}
