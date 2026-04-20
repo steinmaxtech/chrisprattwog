@@ -1756,11 +1756,7 @@ export default function App() {
                                     type={col.type || "text"}
                                     value={site[col.key]}
                                     placeholder={col.key === 'numTechs' ? (woConfig.numTechs || col.ph) : col.key === 'numDays' ? (woConfig.numDays || col.ph) : col.key === 'date' ? (woConfig.defaultDate || col.ph) : col.key === 'budgetTech' ? (woConfig.budgetTech || col.ph) : col.key === 'payRate' ? (woConfig.payRate || col.ph) : col.ph}
-                                    style={{ background: col.key === 'date' && isPastDate(site[col.key] || (col.key === 'date' ? woConfig.defaultDate : '')) ? 'rgba(239,68,68,0.15)' : undefined, borderColor: col.key === 'date' && isPastDate(site[col.key] || (col.key === 'date' ? woConfig.defaultDate : '')) ? '#ef4444' : undefined }}
-                                    onChange={e => updateSite(rowIdx, col.key, e.target.value)}
-                                    onKeyDown={e => handleKeyDown(e, rowIdx, colIdx)}
-                                    onFocus={() => setActiveCell({ row: rowIdx, col: colIdx })}
-                                    style={{ width: "100%", background: "transparent", border: "none", padding: "6px 8px", color: T.text, fontSize: 12, fontFamily: "inherit", outline: cellActive ? "2px solid #e97316" : "none", outlineOffset: "-1px", borderRadius: 3 }}
+                                    style={{ width: "100%", background: col.key === 'date' && isPastDate(site[col.key] || (col.key === 'date' ? woConfig.defaultDate : '')) ? 'rgba(239,68,68,0.15)' : "transparent", border: "none", borderColor: col.key === 'date' && isPastDate(site[col.key] || (col.key === 'date' ? woConfig.defaultDate : '')) ? '#ef4444' : undefined, padding: "6px 8px", color: T.text, fontSize: 12, fontFamily: "inherit", outline: cellActive ? "2px solid #e97316" : "none", outlineOffset: "-1px", borderRadius: 3 }}
                                   />
                                 </td>
                               );

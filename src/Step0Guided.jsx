@@ -2,12 +2,12 @@ import React from "react";
 
 export default function Step0Guided({ T, woType, setWoType, setWoConfig, WO_DEFAULTS, ALL_WO_TYPES, woConfig, projectId, setProjectId, displayName, setDisplayName, projectIdHistory, showPidDropdown, setShowPidDropdown, woTemplates, applyTemplate, includeDEL, setIncludeDEL, includeBRK, setIncludeBRK, includeWRK, setIncludeWRK, setGuidedMode, guidedMode, isPastDate }) {
   return (
+    <div style={{ display: "grid", gap: 16 }}>
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <button onClick={() => { const next = !guidedMode; setGuidedMode(next); try { localStorage.setItem("cpwog_guided", next ? "1" : "0"); } catch {} }} style={{ fontSize: 11, color: T.textFaint, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "4px 12px", cursor: "pointer", fontFamily: "inherit" }}>
                 ⚙ Switch to Advanced Mode
               </button>
             </div>
-              /* ── GUIDED MODE ─────────────────────────────────────────── */
                 {/* Template picker — shown first if templates exist */}
                 {woTemplates.length > 0 && (
                   <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
@@ -76,5 +76,6 @@ export default function Step0Guided({ T, woType, setWoType, setWoConfig, WO_DEFA
                 </div>
 
           </div>
+    </div>
   );
 }
