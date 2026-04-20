@@ -1733,45 +1733,33 @@ export default function App() {
                     <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2 }}>Work Order Type — one CSV per run</div>
                     {woTemplates.length > 0 && <button onClick={() => setShowTemplatePanel(true)} style={{ fontSize: 11, color: T.accent, background: "transparent", border: `1px solid ${T.accent}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit" }}>📋 Use Template</button>}
                   </div>
-              <div style={{ display: "grid", gap: 8 }}>
-                {Object.entries(ALL_WO_TYPES).map(([key, wot]) => (
-                  <div key={key} className={`wo-card${woType === key ? " selected" : ""}`} onClick={() => { setWoType(key); setWoConfig(WO_DEFAULTS[key] ? { ...WO_DEFAULTS[key] } : { templateId: "", startTime: "", defaultDate: "", techType: "Tech", numTechs: wot.numTechs?.toString() || "1", numDays: wot.numDays?.toString() || "1", budgetTech: "", payRate: "", approxHours: "", country: "" }); }}>
-                    <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${woType === key ? T.accent : T.textFaint}`, background: woType === key ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      {woType === key && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#000" }} />}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, color: woType === key ? T.accentHi : T.textMid }}>{key}</div>
-                      <div style={{ fontSize: 11, color: T.textDim, marginTop: 1 }}>{wot.label || key}{wot.desc ? ` · ${wot.desc}` : ""}</div>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                      {adminUnlocked && (
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <button onClick={e => { e.stopPropagation(); setEditingCustomKey(key); setCustomForm({ key, label: wot.label || "", siteIdSuffix: wot.siteIdSuffix || key, numTechs: wot.numTechs?.toString() || "1", numDays: wot.numDays?.toString() || "1", useBundle: !!wot.useBundle }); setShowCustomModal(true); }} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 5, padding: "2px 8px", color: T.textDim, cursor: "pointer", fontSize: 10 }}>edit</button>
-                          <button onClick={e => { e.stopPropagation(); setDeletePw(""); setDeletePwError(false); setDeleteConfirm({ key, isBuiltin: !!WO_TYPES[key] }); }} style={{ background: "transparent", border: "1px solid #ef4444", borderRadius: 5, padding: "2px 8px", color: "#ef4444", cursor: "pointer", fontSize: 10 }}>delete</button>
-                        </div>
-                      )}
-                      <div style={{ fontSize: 11, color: T.textFaint, textAlign: "right", lineHeight: 1.7 }}>
-                        <div>{wot.numTechs} tech{wot.numTechs > 1 ? "s" : ""} × {wot.numDays} day{wot.numDays > 1 ? "s" : ""}</div>
-                        <div>Bundle: <span style={{ color: T.textMid }}>{wot.useBundle ? "yes" : "no"}</span></div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <select value={woType} onChange={e => { const k = e.target.value; const wot = ALL_WO_TYPES[k] || {}; setWoType(k); setWoConfig(WO_DEFAULTS[k] ? { ...WO_DEFAULTS[k] } : { templateId: "", startTime: "", defaultDate: "", techType: "Tech", numTechs: wot.numTechs?.toString() || "1", numDays: wot.numDays?.toString() || "1", budgetTech: "", payRate: "", approxHours: "", country: "US", payType: "Fixed" }); }}
+                      style={{ flex: 1, ...T.inp, fontSize: 14, height: 42, fontFamily: "inherit" }}>
+                      {Object.entries(ALL_WO_TYPES).map(([key, wot]) => (
+                        <option key={key} value={key}>{key} — {(wot.label || key).replace(/^[A-Z]+ — /, "")}</option>
+                      ))}
+                    </select>
+                    {adminUnlocked && woType && (
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button onClick={() => { setEditingCustomKey(woType); const wot = ALL_WO_TYPES[woType] || {}; setCustomForm({ key: woType, label: wot.label || "", siteIdSuffix: wot.siteIdSuffix || woType, numTechs: wot.numTechs?.toString() || "1", numDays: wot.numDays?.toString() || "1", useBundle: !!wot.useBundle }); setShowCustomModal(true); }} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 7, padding: "0 12px", color: T.textDim, cursor: "pointer", fontSize: 11, height: 42 }}>edit</button>
+                        <button onClick={() => { setDeletePw(""); setDeletePwError(false); setDeleteConfirm({ key: woType, isBuiltin: !!WO_TYPES[woType] }); }} style={{ background: "transparent", border: "1px solid #ef4444", borderRadius: 7, padding: "0 12px", color: "#ef4444", cursor: "pointer", fontSize: 11, height: 42 }}>delete</button>
                       </div>
-                    </div>
+                    )}
                   </div>
-                ))}
-              </div>
-              {adminUnlocked && (
-                <button
-                  onClick={() => { setEditingCustomKey(null); setCustomForm({ key: "", label: "", siteIdSuffix: "", numTechs: "1", numDays: "1", useBundle: false }); setShowCustomModal(true); }}
-                  style={{ marginTop: 8, width: "100%", background: "transparent", border: `1px dashed ${T.border2}`, borderRadius: 10, padding: "10px", color: T.textDim, cursor: "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor=T.accent}
-                  onMouseLeave={e => e.currentTarget.style.borderColor=T.border2}
-                >
-                  <span style={{ fontSize: 16 }}>＋</span> Add Custom WO Type
-                </button>
-              )}
-              {adminUnlocked && Object.keys(deletedBuiltins).length > 0 && (
-                <button onClick={() => setShowRecoverModal(true)} style={{ marginTop: 6, width: "100%", background: "transparent", border: `1px dashed #22c55e`, borderRadius: 10, padding: "8px", color: "#22c55e", cursor: "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>↩ Recover Deleted WO Types ({Object.keys(deletedBuiltins).length})</button>
-              )}
-            </div>
+                  {woType && (() => { const wot = ALL_WO_TYPES[woType] || {}; return <div style={{ fontSize: 11, color: T.textFaint, marginTop: 6 }}>{wot.numTechs} tech{wot.numTechs > 1 ? "s" : ""} × {wot.numDays} day{wot.numDays > 1 ? "s" : ""} · Bundle: {wot.useBundle ? "yes" : "no"}</div>; })()}
+                  {adminUnlocked && (
+                    <button onClick={() => { setEditingCustomKey(null); setCustomForm({ key: "", label: "", siteIdSuffix: "", numTechs: "1", numDays: "1", useBundle: false }); setShowCustomModal(true); }}
+                      style={{ marginTop: 8, width: "100%", background: "transparent", border: `1px dashed ${T.border2}`, borderRadius: 10, padding: "10px", color: T.textDim, cursor: "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor=T.accent}
+                      onMouseLeave={e => e.currentTarget.style.borderColor=T.border2}>
+                      <span style={{ fontSize: 16 }}>＋</span> Add Custom WO Type
+                    </button>
+                  )}
+                  {adminUnlocked && Object.keys(deletedBuiltins).length > 0 && (
+                    <button onClick={() => setShowRecoverModal(true)} style={{ marginTop: 6, width: "100%", background: "transparent", border: `1px dashed #22c55e`, borderRadius: 10, padding: "8px", color: "#22c55e", cursor: "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>↩ Recover Deleted WO Types ({Object.keys(deletedBuiltins).length})</button>
+                  )}
+                </div>
 
             {/* Config form for selected WO type */}
             {woType && (
@@ -2081,9 +2069,10 @@ export default function App() {
                       </div>
                     )}
                 </>
-              </div>
-            )}
-          </div>
+              </>
+            </div>
+            </div>
+          )}
         )}
 
         {/* STEP 1: Add Sites */}
@@ -3241,7 +3230,5 @@ export default function App() {
             Log out
           </button>
         </div>
-      </div>
-    </div>
   );
 }
