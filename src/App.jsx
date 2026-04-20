@@ -1595,7 +1595,7 @@ export default function App() {
 
             {guidedMode ? (
               /* ── GUIDED MODE ─────────────────────────────────────────── */
-              <>
+              <div style={{display:"contents"}}>
                 {/* Template picker — shown first if templates exist */}
                 {woTemplates.length > 0 && (
                   <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
@@ -1691,10 +1691,10 @@ export default function App() {
                     ))}
                   </div>
                   <div style={{ fontSize: 11, color: T.textFaint, marginTop: 10 }}>Configure pricing and template IDs for companion orders in Advanced Mode if needed.</div>
-                </div></>
+                </div></div>
             ) : (
               /* ── ADVANCED MODE ─────────────────────────────────────── */
-              <>
+              <div style={{display:"contents"}}>
                 <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
                   <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Project ID</label>
                   <div style={{ position: "relative" }}>
@@ -1867,7 +1867,7 @@ export default function App() {
                   &nbsp;·&nbsp; Bundle: <span style={{ color: T.textMid }}>{ALL_WO_TYPES[woType]?.useBundle ? "yes" : "no"}</span>
                   &nbsp;·&nbsp; Pay Type: <span style={{ color: T.textMid }}>{woConfig.payType || "Fixed"}</span>
                 </div>
-                <>
+                <div style={{display:"contents"}}>
                     {/* BRK checkbox + config */}
                     <div style={{ marginTop: 10, padding: "10px 14px", background: T.surface2, borderRadius: 7, border: `1px solid ${includeBRK ? T.accent : T.border}`, display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setIncludeBRK(d => !d)}>
                       <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${includeBRK ? T.accent : T.border2}`, background: includeBRK ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -2068,8 +2068,8 @@ export default function App() {
                         </div>
                       </div>
                     )}
-                </>
-              </div></>
+                </div>
+              </div></div>
             )}
           </div>
         )}
@@ -3229,5 +3229,7 @@ export default function App() {
             Log out
           </button>
         </div>
+      </div>
+    </div>
   );
 }
