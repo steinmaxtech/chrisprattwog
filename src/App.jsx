@@ -394,10 +394,21 @@ export default function App() {
   const [deletePwError, setDeletePwError] = useState(false);
   const [showRecoverModal, setShowRecoverModal] = useState(false);
   const [showRoutePanel, setShowRoutePanel] = useState(false);
+  const [woTemplates, setWoTemplates] = useState([]);
+  const [showTemplatePanel, setShowTemplatePanel] = useState(false);
+  const [templateSaveName, setTemplateSaveName] = useState("");
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [bulkDateInput, setBulkDateInput] = useState("");
+  const [showBulkDate, setShowBulkDate] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [jobHistory, setJobHistory] = useState([]);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   const [showParserPanel, setShowParserPanel] = useState(false);
+  const [siteLibrary, setSiteLibrary] = useState([]);
+  const [showLibraryPanel, setShowLibraryPanel] = useState(false);
+  const [librarySaveName, setLibrarySaveName] = useState("");
+  const [showSaveLibrary, setShowSaveLibrary] = useState(false);
+  const [librarySearch, setLibrarySearch] = useState("");
   const [easterEgg, setEasterEgg] = useState(null);
   const [logoClickCount, setLogoClickCount] = useState(0);
   const [aiParserLoading, setAiParserLoading] = useState(false);
@@ -455,6 +466,14 @@ export default function App() {
           if (d.overriddenBuiltins) setOverriddenBuiltins(d.overriddenBuiltins);
         }
       })
+      .catch(() => {});
+    sbFetch("/site_library?select=*&order=created_at.desc&limit=50")
+      .then(r => r.ok ? r.json() : null)
+      .then(rows => { if (Array.isArray(rows)) setSiteLibrary(rows); })
+      .catch(() => {});
+    sbFetch("/wo_templates?id=eq.1&select=data")
+      .then(r => r.ok ? r.json() : null)
+      .then(rows => { if (rows?.[0]?.data) setWoTemplates(rows[0].data || []); })
       .catch(() => {});
     sbFetch("/custom_parsers?id=eq.1&select=data")
       .then(r => r.ok ? r.json() : null)
@@ -554,7 +573,7 @@ export default function App() {
     try {
       const response = await fetch("/api/ai", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-cpwog-secret": import.meta.env.VITE_AI_SECRET || "" },
         body: JSON.stringify({ sampleData: parserForm.sampleData.trim().slice(0, 800) })
       });
       if (!response.ok) {
@@ -568,6 +587,81 @@ export default function App() {
       setAiParserError("AI parse failed: " + e.message + " — fill in columns manually.");
     }
     setAiParserLoading(false);
+  };
+
+  const saveToLibrary = async (name) => {
+    if (!name.trim()) return;
+    const completeSites = sites.filter(s => s.code || s.address);
+    if (completeSites.length === 0) return;
+    const entry = {
+      project_name: name.trim(),
+      project_id: projectId,
+      sites: completeSites,
+      site_count: completeSites.length,
+      source_format: "manual",
+      created_at: new Date().toISOString()
+    };
+    sbFetch("/site_library", {
+      method: "POST", prefer: "return=representation",
+      body: JSON.stringify(entry)
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(rows => { if (rows?.[0]) setSiteLibrary(prev => [rows[0], ...prev].slice(0, 50)); })
+      .catch(e => console.error("saveToLibrary failed:", e));
+  };
+
+  const loadFromLibrary = (entry) => {
+    const loaded = (entry.sites || []).map(s => ({
+      ...EMPTY_SITE(), ...s,
+      numTechs: s.numTechs || woConfig.numTechs || "1",
+      numDays: s.numDays || woConfig.numDays || "1",
+      date: s.date || woConfig.defaultDate || "",
+      verified: null, verifying: false, verifyError: ""
+    }));
+    setSites(prev => {
+      const ex = prev.filter(s => s.code || s.address || s.branchName);
+      return ex.length > 0 ? [...ex, ...loaded] : loaded;
+    });
+    setShowLibraryPanel(false);
+  };
+
+  const deleteFromLibrary = (id) => {
+    sbFetch(`/site_library?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" }).catch(() => {});
+    setSiteLibrary(prev => prev.filter(l => l.id !== id));
+  };
+
+  const saveWoTemplates = (next) => {
+    setWoTemplates(next);
+    sbFetch("/wo_templates?id=eq.1", {
+      method: "PATCH", prefer: "return=minimal",
+      body: JSON.stringify({ data: next, updated_at: new Date().toISOString() })
+    }).then(r => { if (!r.ok) r.text().then(t => console.error("saveWoTemplates failed:", t)); }).catch(() => {});
+  };
+
+  const saveCurrentAsTemplate = (name) => {
+    if (!name.trim()) return;
+    const entry = {
+      id: `tpl_${Date.now()}`,
+      name: name.trim(),
+      woType, woConfig: { ...woConfig },
+      includeDEL, delConfig: { ...delConfig },
+      includeBRK, brkConfig: { ...brkConfig },
+      includeWRK, wrkConfig: { ...wrkConfig },
+      created_at: new Date().toISOString()
+    };
+    saveWoTemplates([entry, ...woTemplates]);
+  };
+
+  const applyTemplate = (tpl) => {
+    setWoType(tpl.woType || woType);
+    if (tpl.woConfig) setWoConfig({ ...tpl.woConfig });
+    setIncludeDEL(!!tpl.includeDEL);
+    if (tpl.delConfig) setDelConfig({ ...tpl.delConfig });
+    setIncludeBRK(!!tpl.includeBRK);
+    if (tpl.brkConfig) setBrkConfig({ ...tpl.brkConfig });
+    setIncludeWRK(!!tpl.includeWRK);
+    if (tpl.wrkConfig) setWrkConfig({ ...tpl.wrkConfig });
+    setShowTemplatePanel(false);
   };
 
   const saveCustomParsers = (next) => {
@@ -1201,6 +1295,11 @@ export default function App() {
 
   const rowComplete = (s) => s.code && s.address && s.city && s.state && s.zip && s.date;
   const anyUnverified = sites.some(s => s.address && s.verified !== true);
+  const duplicateCodes = (() => {
+    const counts = {};
+    sites.forEach(s => { if (s.code) counts[s.code] = (counts[s.code] || 0) + 1; });
+    return new Set(Object.keys(counts).filter(k => counts[k] > 1));
+  })();
   const sitesComplete = sites.every(rowComplete);
 
   const canProceed = [
@@ -1410,7 +1509,9 @@ export default function App() {
             <button onClick={() => setDark(d => !d)} style={{ marginLeft: 12, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, transition: "all .15s" }}>
               {dark ? "☀ Light" : "🌙 Dark"}
             </button>
-{adminUnlocked && <button onClick={() => setShowParserPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>⚙ Parsers</button>}
+{adminUnlocked && <button onClick={() => setShowTemplatePanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>📋 Templates{woTemplates.length > 0 ? ` (${woTemplates.length})` : ""}</button>}
+            <button onClick={() => setShowLibraryPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>🏗 Library{siteLibrary.length > 0 ? ` (${siteLibrary.length})` : ""}</button>
+            {adminUnlocked && <button onClick={() => setShowParserPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>⚙ Parsers</button>}
             <button onClick={() => setShowHistoryPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>
               📋 History{jobHistory.length > 0 ? ` (${jobHistory.length})` : ""}
             </button>
@@ -1475,7 +1576,10 @@ export default function App() {
             </div>
 
             <div>
-              <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Work Order Type — one CSV per run</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2 }}>Work Order Type — one CSV per run</div>
+                {woTemplates.length > 0 && <button onClick={() => setShowTemplatePanel(true)} style={{ fontSize: 11, color: T.accent, background: "transparent", border: `1px solid ${T.accent}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit" }}>📋 Use Template</button>}
+              </div>
               <div style={{ display: "grid", gap: 8 }}>
                 {Object.entries(ALL_WO_TYPES).map(([key, wot]) => (
                   <div key={key} className={`wo-card${woType === key ? " selected" : ""}`} onClick={() => { setWoType(key); setWoConfig(WO_DEFAULTS[key] ? { ...WO_DEFAULTS[key] } : { templateId: "", startTime: "", defaultDate: "", techType: "", numTechs: wot.numTechs?.toString() || "1", numDays: wot.numDays?.toString() || "1", budgetTech: "", payRate: "", approxHours: "", country: "" }); }}>
@@ -1898,10 +2002,10 @@ export default function App() {
                       try {
                         const res = await fetch("/api/ai", {
                           method: "POST",
-                          headers: { "Content-Type": "application/json" },
+                          headers: { "Content-Type": "application/json", "x-cpwog-secret": import.meta.env.VITE_AI_SECRET || "" },
                           body: JSON.stringify({ sampleData: pasteText.trim().slice(0, 1200) })
                         });
-                        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || e.error || `Error ${res.status}`); }
+                        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || e.detail || `Server error ${res.status}`); }
                         const p = await res.json();
                         // Apply the mapping directly to the pasted data
                         const delim = p.delim === "tab" ? "\t" : ",";
@@ -1921,7 +2025,7 @@ export default function App() {
                         if (parsed.length === 0) { setPasteError("AI couldn\'t find site data — try PARSE → instead"); setAiPasteLoading(false); return; }
                         setSites(prev => { const ex = prev.filter(s => s.code || s.address || s.branchName); return ex.length > 0 ? [...ex, ...parsed] : parsed; });
                         setPasteMode(false); setPasteText("");
-                      } catch(e) { setPasteError("✨ AI Parse failed: " + e.message); }
+                      } catch(e) { setPasteError(e.message.includes("overloaded") ? "✨ Anthropic is busy — wait a few seconds and try again" : "✨ AI Parse failed: " + e.message); }
                       setAiPasteLoading(false);
                     }}
                     style={{ padding: "8px 18px", borderRadius: 6, border: "none", background: aiPasteLoading ? T.disabledBg : "linear-gradient(135deg,#7c3aed,#5b21b6)", color: aiPasteLoading ? T.disabledText : "#fff", cursor: aiPasteLoading || !pasteText.trim() ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5 }}>
@@ -1936,9 +2040,26 @@ export default function App() {
               <div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
                   <p style={{ color: T.textDim, fontSize: 12, margin: 0 }}>Tab/Enter to navigate · Arrow keys move rows · Verify optional</p>
+                  {showSaveLibrary && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, background: T.surface2, border: `1px solid ${T.accent}`, borderRadius: 8, padding: "8px 12px" }}>
+                      <span style={{ fontSize: 11, color: T.textDim, whiteSpace: "nowrap" }}>Save as:</span>
+                      <input value={librarySaveName} onChange={e => setLibrarySaveName(e.target.value)} placeholder="Project name..." style={{ ...T.inp, flex: 1 }} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => e.target.style.borderColor=T.border2} />
+                      <button onClick={() => { saveToLibrary(librarySaveName); setShowSaveLibrary(false); setLibrarySaveName(""); }} disabled={!librarySaveName.trim()} style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: librarySaveName.trim() ? `linear-gradient(135deg,${T.accent},#dc6209)` : T.disabledBg, color: librarySaveName.trim() ? "#000" : T.disabledText, cursor: librarySaveName.trim() ? "pointer" : "not-allowed", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5 }}>SAVE</button>
+                    </div>
+                  )}
+                  {showBulkDate && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, background: T.surface2, border: `1px solid ${T.accent}`, borderRadius: 8, padding: "8px 12px" }}>
+                      <span style={{ fontSize: 11, color: T.textDim, whiteSpace: "nowrap" }}>Set all dates:</span>
+                      <input type="date" value={bulkDateInput} onChange={e => setBulkDateInput(e.target.value)} style={{ ...T.inp, flex: 1 }} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => e.target.style.borderColor=T.border2} />
+                      <button onClick={() => { if (!bulkDateInput) return; setSites(prev => prev.map(s => ({ ...s, date: bulkDateInput, dateOverridden: false }))); setShowBulkDate(false); setBulkDateInput(""); }} disabled={!bulkDateInput} style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: bulkDateInput ? `linear-gradient(135deg,${T.accent},#dc6209)` : T.disabledBg, color: bulkDateInput ? "#000" : T.disabledText, cursor: bulkDateInput ? "pointer" : "not-allowed", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5, whiteSpace: "nowrap" }}>APPLY ALL</button>
+                      <button onClick={() => { setSites(prev => prev.map(s => s.date ? { ...s, date: "", dateOverridden: false } : s)); setShowBulkDate(false); setBulkDateInput(""); }} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${T.border2}`, background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>Clear all</button>
+                    </div>
+                  )}
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => addRows(1)} style={{ background: T.disabledBg, border: `1px solid ${T.border2}`, borderRadius: 6, padding: "6px 14px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>+ Row</button>
                     <button onClick={() => addRows(5)} style={{ background: T.disabledBg, border: `1px solid ${T.border2}`, borderRadius: 6, padding: "6px 14px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>+ 5 Rows</button>
+                    <button onClick={() => setShowBulkDate(d => !d)} style={{ background: showBulkDate ? `${T.accent}22` : T.disabledBg, border: `1px solid ${showBulkDate ? T.accent : T.border2}`, borderRadius: 6, padding: "6px 14px", color: showBulkDate ? T.accentHi : T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>📅 Bulk Date</button>
+                    <button onClick={() => { setLibrarySaveName(projectId || ""); setShowSaveLibrary(s => !s); }} style={{ background: T.disabledBg, border: `1px solid ${T.border2}`, borderRadius: 6, padding: "6px 14px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>🏗 Save to Library</button>
                     <button onClick={verifyAll} disabled={!anyUnverified} style={{ background: anyUnverified ? "linear-gradient(135deg,#1d4ed8,#1e40af)" : T.disabledBg, border: "none", borderRadius: 6, padding: "6px 16px", color: anyUnverified ? "#fff" : T.disabledText, cursor: anyUnverified ? "pointer" : "not-allowed", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}>✦ Verify All</button>
                   </div>
                 </div>
@@ -1959,7 +2080,8 @@ export default function App() {
                       {sites.map((site, rowIdx) => {
                         const rowActive = activeCell.row === rowIdx;
                         const complete = rowComplete(site);
-                        const borderColor = site.verified === true ? "#22c55e" : site.verified === false ? "#ef4444" : complete ? "#f59e0b" : "transparent";
+                        const isDuplicate = site.code && duplicateCodes.has(site.code);
+                        const borderColor = isDuplicate ? "#f59e0b" : site.verified === true ? "#22c55e" : site.verified === false ? "#ef4444" : complete ? "#f59e0b" : "transparent";
                         return (
                           <tr key={rowIdx} style={{ background: rowActive ? T.rowHover : rowIdx % 2 === 0 ? T.surface : T.rowAlt, borderLeft: `3px solid ${borderColor}`, transition: "background .1s" }}>
                             <td style={{ padding: "4px 6px", textAlign: "center", fontSize: 11, color: T.textFaint, borderBottom: `1px solid ${T.borderRow}` }}>{rowIdx + 1}</td>
@@ -2008,6 +2130,7 @@ export default function App() {
                   <span>Rows: <b style={{ color: T.textMid }}>{sites.length}</b></span>
                   <span>Complete: <b style={{ color: "#22c55e" }}>{sites.filter(rowComplete).length}</b></span>
                   <span>Verified: <b style={{ color: "#22c55e" }}>{sites.filter(s => s.verified === true).length}</b></span>
+                  {duplicateCodes.size > 0 && <span style={{ color: "#f59e0b" }}>⚠ {duplicateCodes.size} duplicate code{duplicateCodes.size > 1 ? "s" : ""}: {[...duplicateCodes].join(", ")}</span>}
                   {(() => { const past = sites.filter(s => isPastDate(s.date || woConfig.defaultDate)); return past.length > 0 ? <span style={{ color: "#ef4444" }}>⚠ {past.length} past date{past.length > 1 ? "s" : ""}</span> : null; })()}
                 </div>
               </div>
@@ -2033,6 +2156,22 @@ export default function App() {
 
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1.1rem", marginBottom: 14 }}>
               <div style={{ fontSize: 10, color: T.textFaint, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>CSV Summary</div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
+                <span style={{ color: T.textDim }}>Project</span>
+                <span style={{ color: T.textMid }}>{projectId}{displayName ? ` — ${displayName}` : ""}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
+                <span style={{ color: T.textDim }}>WO Type</span>
+                <span style={{ color: T.accentHi, fontFamily: "'Bebas Neue',sans-serif", letterSpacing: 2 }}>{woType}{includeDEL ? " + DEL" : ""}{includeBRK ? " + BRK" : ""}{includeWRK ? " + WRK" : ""}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
+                <span style={{ color: T.textDim }}>Sites</span>
+                <span style={{ color: T.textMid }}>{sites.filter(rowComplete).length} sites{duplicateCodes.size > 0 ? <span style={{ color: "#f59e0b", marginLeft: 6 }}>⚠ {duplicateCodes.size} duplicate{duplicateCodes.size > 1 ? "s" : ""}</span> : ""}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
+                <span style={{ color: T.textDim }}>Date Range</span>
+                <span style={{ color: T.textMid }}>{(() => { const dates = sites.filter(rowComplete).map(s => s.date).filter(Boolean).sort(); return dates.length ? (dates[0] === dates[dates.length-1] ? dates[0] : `${dates[0]} → ${dates[dates.length-1]}`) : "—"; })()}</span>
+              </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
                 <span style={{ color: T.textDim }}>Sites</span>
                 <span style={{ color: T.textMid }}>{sites.filter(rowComplete).length}</span>
@@ -2221,6 +2360,88 @@ export default function App() {
         )}
 
         {/* Job History panel */}
+        {/* ── Template Panel ──────────────────────────────────────────────── */}
+        {showTemplatePanel && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 400, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }} onClick={() => setShowTemplatePanel(false)}>
+            <div style={{ background: T.surface, borderLeft: `2px solid ${T.accent}`, height: "100%", width: "100%", maxWidth: 460, overflowY: "auto", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+              <div style={{ padding: "1.25rem 1.5rem", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, background: T.surface, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accentHi }}>📋 WO TEMPLATES</div>
+                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 2 }}>Save your full WO config as a reusable template</div>
+                </div>
+                <button onClick={() => setShowTemplatePanel(false)} style={{ background: "transparent", border: "none", color: T.textMid, cursor: "pointer", fontSize: 20 }}>✕</button>
+              </div>
+              {/* Save current as template */}
+              <div style={{ padding: "1rem 1.5rem", borderBottom: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 11, color: T.textDim, marginBottom: 8 }}>Save current config ({woType}{includeDEL ? " + DEL" : ""}{includeBRK ? " + BRK" : ""}{includeWRK ? " + WRK" : ""}) as a template:</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input value={templateSaveName} onChange={e => setTemplateSaveName(e.target.value)} placeholder="Template name (e.g. PNC LVV Standard)" style={{ ...T.inp, flex: 1 }} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => e.target.style.borderColor=T.border2} onKeyDown={e => { if (e.key === "Enter" && templateSaveName.trim()) { saveCurrentAsTemplate(templateSaveName); setTemplateSaveName(""); }}} />
+                  <button onClick={() => { if (templateSaveName.trim()) { saveCurrentAsTemplate(templateSaveName); setTemplateSaveName(""); }}} disabled={!templateSaveName.trim()} style={{ padding: "8px 16px", borderRadius: 7, border: "none", background: templateSaveName.trim() ? `linear-gradient(135deg,${T.accent},#dc6209)` : T.disabledBg, color: templateSaveName.trim() ? "#000" : T.disabledText, cursor: templateSaveName.trim() ? "pointer" : "not-allowed", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5 }}>SAVE</button>
+                </div>
+              </div>
+              {/* Template list */}
+              <div style={{ flex: 1, padding: "1rem 1.5rem", display: "flex", flexDirection: "column", gap: 8 }}>
+                {woTemplates.length === 0 && <div style={{ color: T.textFaint, fontSize: 13, textAlign: "center", marginTop: 30 }}>No templates yet — save your current config above.</div>}
+                {woTemplates.map(tpl => (
+                  <div key={tpl.id} style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10, padding: "0.9rem 1rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, color: T.accentHi }}>{tpl.name}</div>
+                      <button onClick={() => saveWoTemplates(woTemplates.filter(t => t.id !== tpl.id))} style={{ background: "transparent", border: "1px solid #ef4444", borderRadius: 5, padding: "2px 8px", color: "#ef4444", cursor: "pointer", fontSize: 10 }}>✕</button>
+                    </div>
+                    <div style={{ fontSize: 11, color: T.textDim, lineHeight: 1.7, marginBottom: 8 }}>
+                      {tpl.woType}{tpl.includeDEL ? " + DEL" : ""}{tpl.includeBRK ? " + BRK" : ""}{tpl.includeWRK ? " + WRK" : ""}
+                      {tpl.woConfig?.templateId ? ` · Template ${tpl.woConfig.templateId}` : ""}
+                      {tpl.woConfig?.defaultDate ? ` · ${tpl.woConfig.defaultDate}` : ""}
+                    </div>
+                    <button onClick={() => applyTemplate(tpl)} style={{ width: "100%", padding: "7px", borderRadius: 7, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5 }}>↩ APPLY TEMPLATE</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Site Library Panel ──────────────────────────────────────────────── */}
+        {showLibraryPanel && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 400, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }} onClick={() => setShowLibraryPanel(false)}>
+            <div style={{ background: T.surface, borderLeft: `2px solid ${T.accent}`, height: "100%", width: "100%", maxWidth: 460, overflowY: "auto", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+              <div style={{ padding: "1.25rem 1.5rem", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, background: T.surface, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accentHi }}>🏗 SITE LIBRARY</div>
+                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 2 }}>Saved site lists — load into current job</div>
+                </div>
+                <button onClick={() => setShowLibraryPanel(false)} style={{ background: "transparent", border: "none", color: T.textMid, cursor: "pointer", fontSize: 20 }}>✕</button>
+              </div>
+              <div style={{ padding: "0.75rem 1.5rem", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 58, background: T.surface, zIndex: 1 }}>
+                <input placeholder="Search projects..." value={librarySearch} onChange={e => setLibrarySearch(e.target.value)} style={{ ...T.inp, width: "100%" }} />
+              </div>
+              <div style={{ flex: 1, padding: "1rem 1.5rem", display: "flex", flexDirection: "column", gap: 8 }}>
+                {siteLibrary.length === 0 && <div style={{ color: T.textFaint, fontSize: 13, textAlign: "center", marginTop: 30 }}>No saved site lists yet.<br/>Go to Add Sites → Edit Table → Save to Library.</div>}
+                {siteLibrary
+                  .filter(l => !librarySearch.trim() || (l.project_name || "").toLowerCase().includes(librarySearch.toLowerCase()))
+                  .map(entry => (
+                  <div key={entry.id} style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10, padding: "0.9rem 1rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                      <div>
+                        <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, color: T.accentHi }}>{entry.project_name}</div>
+                        <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>{entry.site_count} sites · {new Date(entry.created_at).toLocaleDateString()}</div>
+                      </div>
+                      <button onClick={() => deleteFromLibrary(entry.id)} style={{ background: "transparent", border: "1px solid #ef4444", borderRadius: 5, padding: "2px 8px", color: "#ef4444", cursor: "pointer", fontSize: 10, flexShrink: 0 }}>✕</button>
+                    </div>
+                    <div style={{ fontSize: 11, color: T.textFaint, marginBottom: 8 }}>
+                      {(entry.sites || []).slice(0, 3).map(s => s.code).join(", ")}{entry.site_count > 3 ? ` +${entry.site_count - 3} more` : ""}
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => loadFromLibrary(entry)} style={{ flex: 1, padding: "7px", borderRadius: 7, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5 }}>↩ LOAD SITES</button>
+                      <button onClick={() => { setSites((entry.sites || []).map(s => ({ ...EMPTY_SITE(), ...s, numTechs: woConfig.numTechs||"1", numDays: woConfig.numDays||"1", date: woConfig.defaultDate||"", verified: null, verifying: false, verifyError: "" }))); setShowLibraryPanel(false); }} style={{ flex: 1, padding: "7px", borderRadius: 7, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontFamily: "inherit", fontSize: 11 }}>Replace all</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Parser Panel ─────────────────────────────────────────────── */}
         {showParserPanel && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 400, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }} onClick={() => { setShowParserPanel(false); setEditingParser(null); setParserPreview([]); setParserPreviewError(""); }}>
@@ -2772,3 +2993,4 @@ export default function App() {
     </div>
   );
 }
+
