@@ -1507,94 +1507,14 @@ export default function App() {
     </div>
   );
 
-  return (
-    <div style={{ fontFamily: "'DM Mono','Courier New',monospace", background: T.bg, minHeight: "100vh", color: T.text }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Bebas+Neue&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        input, textarea { font-family: 'DM Mono', monospace; }
-        input:focus, textarea:focus { outline: none; border-color: ${T.accent} !important; }
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: ${T.surface}; }
-        ::-webkit-scrollbar-thumb { background: ${T.accent}; border-radius: 3px; }
-        input[type=date]::-webkit-calendar-picker-indicator { filter: ${dark ? "invert(0.6)" : "none"}; }
-        .tab-btn { background: transparent; border: none; cursor: pointer; padding: 8px 16px; font-family: 'DM Mono',monospace; font-size: 12px; border-bottom: 2px solid transparent; transition: all .15s; }
-        .tab-btn.active { color: ${T.tabActive}; border-bottom-color: ${T.tabActive}; }
-        .tab-btn:not(.active) { color: ${T.tabInactive}; }
-        .tab-btn:not(.active):hover { color: ${T.tabHover}; }
-        .wo-card { border-radius: 10px; padding: 1rem 1.25rem; cursor: pointer; display: flex; align-items: center; gap: 14px; transition: all .15s; border: 2px solid ${T.border}; background: ${T.surface}; }
-        .wo-card:hover { border-color: ${T.border2}; }
-        .wo-card.selected { border-color: ${T.accent}; background: ${T.cardSel}; }
-      `}</style>
-
-      {/* Header */}
-      <div style={{ background: T.header, borderBottom: `2px solid ${T.accent}`, padding: "0 2rem" }}>
-        <div style={{ maxWidth: 960, margin: "0 auto", display: "flex", alignItems: "center", gap: 14, padding: "1.1rem 0" }}>
-          <img src={`data:image/png;base64,${LOGO_IMG}`} alt="Logo"
-              onClick={() => {
-                const n = logoClickCount + 1;
-                setLogoClickCount(n);
-                if (n === 5) { setEasterEgg(EASTER_EGGS[4]); setTimeout(() => setEasterEgg(null), 10000); setLogoClickCount(0); }
-                else if (n === 3) { setEasterEgg("☕ " + AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)]); setTimeout(() => setEasterEgg(null), 10000); }
-              }}
-              style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: `2px solid ${T.accent}`, cursor: "pointer" }} />
-          <div>
-            <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accent, lineHeight: 1 }}>CHRIS PRATT WORK ORDER GENERATOR</div>
-            <div style={{ fontSize: 10, color: T.textFaint, letterSpacing: 1.5, marginTop: 2 }}>Automated FieldNation CSV Upload</div>
-          </div>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
-            {STEP_LABELS.map((label, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <div style={{ width: 26, height: 26, borderRadius: "50%", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: i < step ? T.accent : i === step ? "transparent" : T.surface, color: i < step ? "#000" : i === step ? T.accent : T.textFaint, border: i === step ? `2px solid ${T.accent}` : "2px solid transparent", transition: "all .2s" }}>{i < step ? "✓" : i + 1}</div>
-                {i < STEP_LABELS.length - 1 && <div style={{ width: 20, height: 1, background: i < step ? T.accent : T.border }} />}
-              </div>
-            ))}
-            <button onClick={() => setDark(d => !d)} style={{ marginLeft: 12, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, transition: "all .15s" }}>
-              {dark ? "☀ Light" : "🌙 Dark"}
-            </button>
-{adminUnlocked && <button onClick={() => setShowTemplatePanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>📋 Templates{woTemplates.length > 0 ? ` (${woTemplates.length})` : ""}</button>}
-            <button onClick={() => setShowLibraryPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>🏗 Library{siteLibrary.length > 0 ? ` (${siteLibrary.length})` : ""}</button>
-            {adminUnlocked && <button onClick={() => setShowParserPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>⚙ Parsers</button>}
-            <button onClick={() => setShowHistoryPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>
-              📋 History{jobHistory.length > 0 ? ` (${jobHistory.length})` : ""}
-            </button>
-            <button
-              onClick={() => {
-                if (adminUnlocked) { setAdminUnlocked(false); }
-                else { setLockPwInput(""); setLockPwError(false); setShowLockModal(true); }
-              }}
-              title={adminUnlocked ? "Lock admin mode" : "Unlock edit & delete"}
-              style={{ background: adminUnlocked ? "rgba(234,88,12,0.15)" : "transparent", border: `1px solid ${adminUnlocked ? T.accent : T.border2}`, borderRadius: 20, padding: "5px 12px", color: adminUnlocked ? T.accent : T.textMid, cursor: "pointer", fontSize: 15, display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}
-            >
-              {adminUnlocked ? "🔓" : "🔒"}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: 960, margin: "0 auto", padding: "2rem" }}>
-        {/* Step title */}
-        <div style={{ marginBottom: "1.25rem" }}>
-          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 30, letterSpacing: 2 }}>
-            <span style={{ color: T.accent }}>0{step + 1} / </span>
-            <span style={{ color: T.text }}>{STEP_LABELS[step]}</span>
-          </div>
-          <div style={{ height: 2, width: 48, background: T.accent, marginTop: 6, borderRadius: 2 }} />
-        </div>
-
-        {/* STEP 0: Project Info + WO Type */}
-        {step === 0 && (
+        {/* Step 0: Guided Mode */}
+        {step === 0 && guidedMode && (
           <div style={{ display: "grid", gap: 16 }}>
-
-            {/* Mode toggle */}
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <button onClick={() => { const next = !guidedMode; setGuidedMode(next); try { localStorage.setItem("cpwog_guided", next ? "1" : "0"); } catch {} }} style={{ fontSize: 11, color: T.textFaint, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "4px 12px", cursor: "pointer", fontFamily: "inherit" }}>
-                {guidedMode ? "⚙ Switch to Advanced Mode" : "✦ Switch to Guided Mode"}
+                ⚙ Switch to Advanced Mode
               </button>
             </div>
-
-            {(() => {
-              if (guidedMode) return (
               /* ── GUIDED MODE ─────────────────────────────────────────── */
               <div style={{display:"contents"}}>
                 {/* Template picker — shown first if templates exist */}
@@ -1659,43 +1579,17 @@ export default function App() {
                           </div>
                           {woType === key && <div style={{ fontSize: 18 }}>✓</div>}
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
+          </div>
+        )}
 
-                {/* Start Date — simple single field */}
-                <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
-                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2, color: T.accentHi, marginBottom: 4 }}>When does work start?</div>
-                  <div style={{ fontSize: 12, color: T.textDim, marginBottom: 12 }}>This fills the start date for all sites. You can override individual sites later.</div>
-                  <input type="date" style={{ ...T.inp, fontSize: 14, width: "100%" }} value={woConfig.defaultDate || ""} onChange={e => setWoConfig(prev => ({ ...prev, defaultDate: e.target.value }))}
-                    onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => e.target.style.borderColor=T.border2} />
-                  {woConfig.defaultDate && isPastDate(woConfig.defaultDate) && <div style={{ fontSize: 11, color: "#ef4444", marginTop: 6 }}>⚠ This date is in the past</div>}
-                </div>
-
-                {/* Companion WOs — simple checkboxes */}
-                <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
-                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2, color: T.accentHi, marginBottom: 4 }}>Any companion work orders?</div>
-                  <div style={{ fontSize: 12, color: T.textDim, marginBottom: 12 }}>These generate separate CSVs alongside your main work order.</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {[
-                      { flag: includeDEL, set: setIncludeDEL, label: "DEL — Delivery ticket on Day 1" },
-                      { flag: includeBRK, set: setIncludeBRK, label: "BRK — Backboard ticket on Day 1" },
-                      { flag: includeWRK, set: setIncludeWRK, label: "WRK — Walk-in ready kit on Day 1" },
-                    ].map(({ flag, set, label }) => (
-                      <div key={label} onClick={() => set(f => !f)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "10px 14px", borderRadius: 8, border: `1px solid ${flag ? T.accent : T.border}`, background: flag ? `${T.accent}10` : T.surface2 }}>
-                        <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${flag ? T.accent : T.border2}`, background: flag ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          {flag && <span style={{ color: "#000", fontSize: 11, fontWeight: 700 }}>✓</span>}
-                        </div>
-                        <span style={{ fontSize: 12, color: flag ? T.text : T.textMid }}>{label}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 10 }}>Configure pricing and template IDs for companion orders in Advanced Mode if needed.</div>
-                </div>
-                </div>
-              );
-              return (
+        {/* Step 0: Advanced Mode */}
+        {step === 0 && !guidedMode && (
+          <div style={{ display: "grid", gap: 16 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button onClick={() => { const next = !guidedMode; setGuidedMode(next); try { localStorage.setItem("cpwog_guided", next ? "1" : "0"); } catch {} }} style={{ fontSize: 11, color: T.textFaint, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "4px 12px", cursor: "pointer", fontFamily: "inherit" }}>
+                ✦ Switch to Guided Mode
+              </button>
+            </div>
               <div style={{display:"contents"}}>
                 <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
                   <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Project ID</label>
@@ -1749,7 +1643,6 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                  {woType && (() => { const wot = ALL_WO_TYPES[woType] || {}; return <div style={{ fontSize: 11, color: T.textFaint, marginTop: 6 }}>{wot.numTechs} tech{wot.numTechs > 1 ? "s" : ""} × {wot.numDays} day{wot.numDays > 1 ? "s" : ""} · Bundle: {wot.useBundle ? "yes" : "no"}</div>; })()}
                   {adminUnlocked && (
                     <button onClick={() => { setEditingCustomKey(null); setCustomForm({ key: "", label: "", siteIdSuffix: "", numTechs: "1", numDays: "1", useBundle: false }); setShowCustomModal(true); }}
                       style={{ marginTop: 8, width: "100%", background: "transparent", border: `1px dashed ${T.border2}`, borderRadius: 10, padding: "10px", color: T.textDim, cursor: "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
@@ -2077,6 +1970,76 @@ export default function App() {
             })()}
           </div>
         )}
+          </div>
+        )}
+
+
+  return (
+    <div style={{ fontFamily: "'DM Mono','Courier New',monospace", background: T.bg, minHeight: "100vh", color: T.text }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Bebas+Neue&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        .tab-btn { background: transparent; border: none; padding: 10px 16px; color: ${T.tabInactive}; cursor: pointer; font-size: 12px; font-family: inherit; border-bottom: 2px solid transparent; transition: all .15s; }
+        .tab-btn:hover { color: ${T.tabHover}; }
+        .tab-btn.active { color: ${T.tabActive}; border-bottom-color: ${T.tabActive}; }
+        .wo-card { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; border: 1.5px solid ${T.border}; background: ${T.surface}; cursor: pointer; transition: all .15s; }
+        .wo-card:hover { border-color: ${T.accent}; }
+        .wo-card.selected { border-color: ${T.accent}; background: ${T.cardSel}; }
+      `}</style>
+
+      {/* Header */}
+      <div style={{ background: T.header, borderBottom: `2px solid ${T.accent}`, padding: "0 2rem", position: "sticky", top: 0, zIndex: 50 }}>
+        <div style={{ maxWidth: 960, margin: "0 auto", display: "flex", alignItems: "center", gap: 14, padding: "1.1rem 0" }}>
+          <img src={`data:image/png;base64,${LOGO_IMG}`} alt="Logo"
+            onClick={() => {
+              const n = logoClickCount + 1;
+              setLogoClickCount(n);
+              if (n === 5) { setEasterEgg(EASTER_EGGS[4]); setTimeout(() => setEasterEgg(null), 10000); setLogoClickCount(0); }
+              else if (n === 3) { setEasterEgg("☕ " + AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)]); setTimeout(() => setEasterEgg(null), 10000); }
+            }}
+            style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: `2px solid ${T.accent}`, cursor: "pointer" }} />
+          <div>
+            <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accent, lineHeight: 1 }}>CHRIS PRATT WORK ORDER GENERATOR</div>
+            <div style={{ fontSize: 10, color: T.textFaint, letterSpacing: 1.5, marginTop: 2 }}>Automated FieldNation CSV Upload</div>
+          </div>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+            {STEP_LABELS.map((label, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <div style={{ width: 26, height: 26, borderRadius: "50%", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: i < step ? T.accent : i === step ? "transparent" : T.surface, color: i < step ? "#000" : i === step ? T.accent : T.textFaint, border: i === step ? `2px solid ${T.accent}` : "2px solid transparent", transition: "all .2s" }}>{i < step ? "✓" : i + 1}</div>
+                {i < STEP_LABELS.length - 1 && <div style={{ width: 20, height: 1, background: i < step ? T.accent : T.border }} />}
+              </div>
+            ))}
+            <button onClick={() => setDark(d => !d)} style={{ marginLeft: 12, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, transition: "all .15s" }}>
+              {dark ? "☀ Light" : "🌙 Dark"}
+            </button>
+            {adminUnlocked && <button onClick={() => setShowTemplatePanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>📋 Templates{woTemplates.length > 0 ? ` (${woTemplates.length})` : ""}</button>}
+            <button onClick={() => setShowLibraryPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>🏗 Library{siteLibrary.length > 0 ? ` (${siteLibrary.length})` : ""}</button>
+            {adminUnlocked && <button onClick={() => setShowParserPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>⚙ Parsers</button>}
+            <button onClick={() => setShowHistoryPanel(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "5px 12px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>
+              📋 History{jobHistory.length > 0 ? ` (${jobHistory.length})` : ""}
+            </button>
+            <button
+              onClick={() => { if (adminUnlocked) { setAdminUnlocked(false); } else { setLockPwInput(""); setLockPwError(false); setShowLockModal(true); } }}
+              style={{ background: adminUnlocked ? "rgba(234,88,12,0.15)" : "transparent", border: `1px solid ${adminUnlocked ? T.accent : T.border2}`, borderRadius: 20, padding: "5px 12px", color: adminUnlocked ? T.accent : T.textMid, cursor: "pointer", fontSize: 15, display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>
+              {adminUnlocked ? "🔓" : "🔒"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 960, margin: "0 auto", padding: "2rem" }}>
+        {/* Step title */}
+        <div style={{ marginBottom: "1.25rem" }}>
+          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 30, letterSpacing: 2 }}>
+            <span style={{ color: T.accent }}>0{step + 1} / </span>
+            <span style={{ color: T.text }}>{STEP_LABELS[step]}</span>
+          </div>
+          <div style={{ height: 2, width: 48, background: T.accent, marginTop: 6, borderRadius: 2 }} />
+        </div>
+
+
+        {/* STEP 0: Project Info + WO Type */}
+
 
         {/* STEP 1: Add Sites */}
         {step === 1 && (
