@@ -74,7 +74,7 @@ const WO_TYPES = {
 };
 
 // Default configs per type — blank, user fills in each run
-const BLANK_CFG = { templateId: "", startTime: "", defaultDate: "", techType: "", numTechs: "1", numDays: "1", budgetTech: "", payRate: "", approxHours: "", country: "", payType: "Fixed" };
+const BLANK_CFG = { templateId: "", startTime: "", defaultDate: "", techType: "Tech", numTechs: "1", numDays: "1", budgetTech: "", payRate: "", approxHours: "", country: "US", payType: "Fixed" };
 const WO_DEFAULTS = {
   LVL:  { ...BLANK_CFG, templateId: "103095" },
   LVT:  { ...BLANK_CFG, templateId: "103094" },
@@ -105,7 +105,7 @@ function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
         const date = addDays(site.date, d);
         const siteId = `${site.code}-${meta.siteIdSuffix}(${t})`;
         const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-        rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: `${cfg.techType} ${t}`, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[t - 1] || "" }));
+        rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: normalizeTime(cfg.startTime), techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[t - 1] || "" }));
       }
     }
   } else {
@@ -113,7 +113,7 @@ function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
       const date = addDays(site.date, d);
       const siteId = `${site.code}-${meta.siteIdSuffix}`;
       const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-      rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: cfg.startTime, techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[0] || "" }));
+      rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: normalizeTime(cfg.startTime), techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[0] || "" }));
     }
     if (numDays > 1) rows.push([]);
   }
@@ -139,6 +139,45 @@ function makeRow({ templateId, projectId, siteId, bundle, site, date, startTime,
     "", "", "", "", approxHours, estDuration, payType || "Fixed",
     locName, locName
   ];
+}
+
+
+
+const FN_TEMPLATE_BANK = [
+  { id: "103095", name: "LVL — Low Voltage Lead" },
+  { id: "103094", name: "LVT — Low Voltage Tech" },
+  { id: "102221", name: "DEL — Delivery/Install" },
+  { id: "102222", name: "BRK — Backerboard Creation" },
+  { id: "103096", name: "INT — Installation Technician" },
+  { id: "103097", name: "INL — Installation Lead" },
+];
+
+function normalizeTime(raw) {
+  // Converts any time format to "H:MMam/pm" as expected by FieldNation
+  // e.g. "4:30pm", "4:30 PM", "16:30", "16:30:00" all → "4:30pm"
+  if (!raw || !raw.trim()) return "";
+  const s = raw.trim();
+
+  // Already in "H:MMam/pm" or "H:MMam" format — normalize spacing/case
+  const already = s.match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/i);
+  if (already) return `${parseInt(already[1])}:${already[2]}${already[3].toLowerCase()}`;
+
+  // Plain "4pm" / "4 pm"
+  const hourOnly = s.match(/^(\d{1,2})\s*(am|pm)$/i);
+  if (hourOnly) return `${parseInt(hourOnly[1])}:00${hourOnly[2].toLowerCase()}`;
+
+  // Military HH:MM or HH:MM:SS → convert to 12-hour am/pm
+  const mil = s.match(/^(\d{1,2}):(\d{2})(:\d{2})?$/);
+  if (mil) {
+    let h = parseInt(mil[1]);
+    const m = mil[2];
+    const suffix = h >= 12 ? "pm" : "am";
+    if (h > 12) h -= 12;
+    if (h === 0) h = 12;
+    return `${h}:${m}${suffix}`;
+  }
+
+  return s; // return as-is if unrecognized
 }
 
 function addDays(dateStr, n) {
@@ -394,6 +433,7 @@ export default function App() {
   const [deletePwError, setDeletePwError] = useState(false);
   const [showRecoverModal, setShowRecoverModal] = useState(false);
   const [showRoutePanel, setShowRoutePanel] = useState(false);
+  const [guidedMode, setGuidedMode] = useState(() => { try { return localStorage.getItem("cpwog_guided") !== "0"; } catch { return true; } });
   const [woTemplates, setWoTemplates] = useState([]);
   const [showTemplatePanel, setShowTemplatePanel] = useState(false);
   const [templateSaveName, setTemplateSaveName] = useState("");
@@ -1545,47 +1585,157 @@ export default function App() {
         {/* STEP 0: Project Info + WO Type */}
         {step === 0 && (
           <div style={{ display: "grid", gap: 16 }}>
-            <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
-              <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Project ID</label>
-              <div style={{ position: "relative" }}>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input style={{ ...T.inp, flex: 1 }} placeholder="e.g. 10035574 - 4569395 - PNC - First Bank Conversion" value={projectId} onChange={e => setProjectId(e.target.value)} onFocus={e => { e.target.style.borderColor=T.accent; }} onBlur={e => { e.target.style.borderColor=T.border2; setTimeout(() => setShowPidDropdown(false), 150); }} />
-                  {projectIdHistory.length > 0 && <button onClick={() => setShowPidDropdown(d => !d)} style={{ background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "0 10px", color: T.textMid, cursor: "pointer", fontSize: 13, flexShrink: 0 }} title="Recent project IDs">▾</button>}
-                </div>
-                {showPidDropdown && projectIdHistory.length > 0 && (
-                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 7, zIndex: 100, marginTop: 3, maxHeight: 200, overflowY: "auto" }}>
-                    {projectIdHistory.map(pid => (
-                      <div key={pid} onClick={() => { setProjectId(pid); setShowPidDropdown(false); }} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, color: T.textMid, borderBottom: `1px solid ${T.border}` }} onMouseEnter={e => e.currentTarget.style.background=T.rowHover} onMouseLeave={e => e.currentTarget.style.background="transparent"}>{pid}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div style={{ fontSize: 11, color: T.textFaint, marginTop: 6 }}>Example: <span style={{ color: T.accentHi }}>10035574 - 4569395 - PNC - First Bank Conversion</span></div>
-              <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6, marginTop: 14 }}>Location Display Name Prefix</label>
-              <div style={{ position: "relative" }}>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input style={{ ...T.inp, flex: 1 }} placeholder="e.g. PNC - FB Conversion (H1)" value={displayName} onChange={e => setDisplayName(e.target.value)} onFocus={e => { e.target.style.borderColor=T.accent; }} onBlur={e => { e.target.style.borderColor=T.border2; setTimeout(() => setShowDnDropdown(false), 150); }} />
-                  {displayNameHistory.length > 0 && <button onClick={() => setShowDnDropdown(d => !d)} style={{ background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "0 10px", color: T.textMid, cursor: "pointer", fontSize: 13, flexShrink: 0 }} title="Recent prefixes">▾</button>}
-                </div>
-                {showDnDropdown && displayNameHistory.length > 0 && (
-                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 7, zIndex: 100, marginTop: 3, maxHeight: 200, overflowY: "auto" }}>
-                    {displayNameHistory.map(dn => (
-                      <div key={dn} onClick={() => { setDisplayName(dn); setShowDnDropdown(false); }} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, color: T.textMid, borderBottom: `1px solid ${T.border}` }} onMouseEnter={e => e.currentTarget.style.background=T.rowHover} onMouseLeave={e => e.currentTarget.style.background="transparent"}>{dn}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div style={{ fontSize: 11, color: T.textFaint, marginTop: 6 }}>Used as prefix in Location Display Name and Location Name columns · defaults to Project ID if blank</div>
+
+            {/* Mode toggle */}
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button onClick={() => { const next = !guidedMode; setGuidedMode(next); try { localStorage.setItem("cpwog_guided", next ? "1" : "0"); } catch {} }} style={{ fontSize: 11, color: T.textFaint, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "4px 12px", cursor: "pointer", fontFamily: "inherit" }}>
+                {guidedMode ? "⚙ Switch to Advanced Mode" : "✦ Switch to Guided Mode"}
+              </button>
             </div>
 
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2 }}>Work Order Type — one CSV per run</div>
-                {woTemplates.length > 0 && <button onClick={() => setShowTemplatePanel(true)} style={{ fontSize: 11, color: T.accent, background: "transparent", border: `1px solid ${T.accent}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit" }}>📋 Use Template</button>}
-              </div>
+            {guidedMode ? (
+              /* ── GUIDED MODE ─────────────────────────────────────────── */
+              <>
+                {/* Template picker — shown first if templates exist */}
+                {woTemplates.length > 0 && (
+                  <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
+                    <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2, color: T.accentHi, marginBottom: 4 }}>📋 Start from a saved template?</div>
+                    <div style={{ fontSize: 12, color: T.textDim, marginBottom: 12 }}>Pick a template to pre-fill all settings, or skip and configure below.</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {woTemplates.map(tpl => (
+                        <button key={tpl.id} onClick={() => applyTemplate(tpl)} style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.surface2, color: T.textMid, cursor: "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+                          <span style={{ fontWeight: 600, color: T.text }}>{tpl.name}</span>
+                          <span style={{ fontSize: 10, color: T.textFaint }}>{tpl.woType}{tpl.includeDEL ? " + DEL" : ""}{tpl.includeBRK ? " + BRK" : ""}{tpl.includeWRK ? " + WRK" : ""}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Project Name — single merged field */}
+                <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
+                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2, color: T.accentHi, marginBottom: 4 }}>What project is this for?</div>
+                  <div style={{ fontSize: 12, color: T.textDim, marginBottom: 12 }}>Enter the project name or ID — this appears on every work order.</div>
+                  <div style={{ position: "relative" }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input style={{ ...T.inp, flex: 1, fontSize: 14 }} placeholder="e.g. PNC - First Bank Conversion" value={projectId} onChange={e => { setProjectId(e.target.value); setDisplayName(e.target.value); }} onFocus={e => { e.target.style.borderColor=T.accent; }} onBlur={e => { e.target.style.borderColor=T.border2; setTimeout(() => setShowPidDropdown(false), 150); }} autoFocus />
+                      {projectIdHistory.length > 0 && <button onClick={() => setShowPidDropdown(d => !d)} style={{ background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "0 10px", color: T.textMid, cursor: "pointer", fontSize: 13 }}>▾</button>}
+                    </div>
+                    {showPidDropdown && projectIdHistory.length > 0 && (
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 7, zIndex: 100, marginTop: 3, maxHeight: 200, overflowY: "auto" }}>
+                        {projectIdHistory.map(pid => (
+                          <div key={pid} onClick={() => { setProjectId(pid); setDisplayName(pid); setShowPidDropdown(false); }} style={{ padding: "10px 14px", cursor: "pointer", fontSize: 13, color: T.textMid, borderBottom: `1px solid ${T.border}` }} onMouseEnter={e => e.currentTarget.style.background=T.rowHover} onMouseLeave={e => e.currentTarget.style.background="transparent"}>{pid}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* WO Type — plain English cards */}
+                <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
+                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2, color: T.accentHi, marginBottom: 4 }}>What type of work are you scheduling?</div>
+                  <div style={{ fontSize: 12, color: T.textDim, marginBottom: 14 }}>Pick one — you can generate different types separately.</div>
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {Object.entries(ALL_WO_TYPES).map(([key, wot]) => {
+                      const friendlyDesc = {
+                        LVL: "Main installation lead — manages the site over multiple days",
+                        LVT: "Low voltage technicians — multiple techs per site over multiple days",
+                        DEL: "Equipment delivery and installation — one tech, one day",
+                        BRK: "Backerboard creation — one tech, one day",
+                        INT: "Installation technician — one tech, flexible days",
+                        INL: "Installation lead — one tech, flexible days",
+                        WRK: "Walk-in ready kit — one tech, one day",
+                      }[key] || wot.label || key;
+                      return (
+                        <div key={key} onClick={() => { setWoType(key); setWoConfig(WO_DEFAULTS[key] ? { ...WO_DEFAULTS[key] } : { templateId: "", startTime: "", defaultDate: "", techType: "Tech", numTechs: wot.numTechs?.toString() || "1", numDays: wot.numDays?.toString() || "1", budgetTech: "", payRate: "", approxHours: "", country: "" }); }}
+                          style={{ padding: "14px 16px", borderRadius: 10, border: `2px solid ${woType === key ? T.accent : T.border}`, background: woType === key ? `${T.accent}12` : T.surface2, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, transition: "all .15s" }}>
+                          <div style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${woType === key ? T.accent : T.textFaint}`, background: woType === key ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            {woType === key && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#000" }} />}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: woType === key ? T.accentHi : T.text }}>{key} — {(wot.label || key).replace(/^[A-Z]+ — /, "")}</div>
+                            <div style={{ fontSize: 11, color: T.textFaint, marginTop: 2 }}>{friendlyDesc}</div>
+                          </div>
+                          {woType === key && <div style={{ fontSize: 18 }}>✓</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Start Date — simple single field */}
+                <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
+                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2, color: T.accentHi, marginBottom: 4 }}>When does work start?</div>
+                  <div style={{ fontSize: 12, color: T.textDim, marginBottom: 12 }}>This fills the start date for all sites. You can override individual sites later.</div>
+                  <input type="date" style={{ ...T.inp, fontSize: 14, width: "100%" }} value={woConfig.defaultDate || ""} onChange={e => setWoConfig(prev => ({ ...prev, defaultDate: e.target.value }))}
+                    onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => e.target.style.borderColor=T.border2} />
+                  {woConfig.defaultDate && isPastDate(woConfig.defaultDate) && <div style={{ fontSize: 11, color: "#ef4444", marginTop: 6 }}>⚠ This date is in the past</div>}
+                </div>
+
+                {/* Companion WOs — simple checkboxes */}
+                <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
+                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2, color: T.accentHi, marginBottom: 4 }}>Any companion work orders?</div>
+                  <div style={{ fontSize: 12, color: T.textDim, marginBottom: 12 }}>These generate separate CSVs alongside your main work order.</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {[
+                      { flag: includeDEL, set: setIncludeDEL, label: "DEL — Delivery ticket on Day 1" },
+                      { flag: includeBRK, set: setIncludeBRK, label: "BRK — Backboard ticket on Day 1" },
+                      { flag: includeWRK, set: setIncludeWRK, label: "WRK — Walk-in ready kit on Day 1" },
+                    ].map(({ flag, set, label }) => (
+                      <div key={label} onClick={() => set(f => !f)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "10px 14px", borderRadius: 8, border: `1px solid ${flag ? T.accent : T.border}`, background: flag ? `${T.accent}10` : T.surface2 }}>
+                        <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${flag ? T.accent : T.border2}`, background: flag ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          {flag && <span style={{ color: "#000", fontSize: 11, fontWeight: 700 }}>✓</span>}
+                        </div>
+                        <span style={{ fontSize: 12, color: flag ? T.text : T.textMid }}>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 10 }}>Configure pricing and template IDs for companion orders in Advanced Mode if needed.</div>
+                </div></>
+            ) : (
+              /* ── ADVANCED MODE ─────────────────────────────────────── */
+              <>
+                <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
+                  <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Project ID</label>
+                  <div style={{ position: "relative" }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input style={{ ...T.inp, flex: 1 }} placeholder="e.g. 10035574 - 4569395 - PNC - First Bank Conversion" value={projectId} onChange={e => { setProjectId(e.target.value); if (!displayName || displayName === projectId) setDisplayName(e.target.value); }} onFocus={e => { e.target.style.borderColor=T.accent; }} onBlur={e => { e.target.style.borderColor=T.border2; setTimeout(() => setShowPidDropdown(false), 150); }} />
+                      {projectIdHistory.length > 0 && <button onClick={() => setShowPidDropdown(d => !d)} style={{ background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "0 10px", color: T.textMid, cursor: "pointer", fontSize: 13, flexShrink: 0 }} title="Recent project IDs">▾</button>}
+                    </div>
+                    {showPidDropdown && projectIdHistory.length > 0 && (
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 7, zIndex: 100, marginTop: 3, maxHeight: 200, overflowY: "auto" }}>
+                        {projectIdHistory.map(pid => (
+                          <div key={pid} onClick={() => { setProjectId(pid); if (!displayName || displayName === projectId) setDisplayName(pid); setShowPidDropdown(false); }} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, color: T.textMid, borderBottom: `1px solid ${T.border}` }} onMouseEnter={e => e.currentTarget.style.background=T.rowHover} onMouseLeave={e => e.currentTarget.style.background="transparent"}>{pid}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 6 }}>Example: <span style={{ color: T.accentHi }}>10035574 - 4569395 - PNC - First Bank Conversion</span></div>
+                  <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6, marginTop: 14 }}>Location Display Name Prefix</label>
+                  <div style={{ position: "relative" }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input style={{ ...T.inp, flex: 1 }} placeholder="e.g. PNC - FB Conversion (H1)" value={displayName} onChange={e => setDisplayName(e.target.value)} onFocus={e => { e.target.style.borderColor=T.accent; }} onBlur={e => { e.target.style.borderColor=T.border2; setTimeout(() => setShowDnDropdown(false), 150); }} />
+                      {displayNameHistory.length > 0 && <button onClick={() => setShowDnDropdown(d => !d)} style={{ background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "0 10px", color: T.textMid, cursor: "pointer", fontSize: 13, flexShrink: 0 }} title="Recent prefixes">▾</button>}
+                    </div>
+                    {showDnDropdown && displayNameHistory.length > 0 && (
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 7, zIndex: 100, marginTop: 3, maxHeight: 200, overflowY: "auto" }}>
+                        {displayNameHistory.map(dn => (
+                          <div key={dn} onClick={() => { setDisplayName(dn); setShowDnDropdown(false); }} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, color: T.textMid, borderBottom: `1px solid ${T.border}` }} onMouseEnter={e => e.currentTarget.style.background=T.rowHover} onMouseLeave={e => e.currentTarget.style.background="transparent"}>{dn}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 6 }}>Used as prefix in Location Display Name and Location Name columns · defaults to Project ID if blank</div>
+                </div>
+
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2 }}>Work Order Type — one CSV per run</div>
+                    {woTemplates.length > 0 && <button onClick={() => setShowTemplatePanel(true)} style={{ fontSize: 11, color: T.accent, background: "transparent", border: `1px solid ${T.accent}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit" }}>📋 Use Template</button>}
+                  </div>
               <div style={{ display: "grid", gap: 8 }}>
                 {Object.entries(ALL_WO_TYPES).map(([key, wot]) => (
-                  <div key={key} className={`wo-card${woType === key ? " selected" : ""}`} onClick={() => { setWoType(key); setWoConfig(WO_DEFAULTS[key] ? { ...WO_DEFAULTS[key] } : { templateId: "", startTime: "", defaultDate: "", techType: "", numTechs: wot.numTechs?.toString() || "1", numDays: wot.numDays?.toString() || "1", budgetTech: "", payRate: "", approxHours: "", country: "" }); }}>
+                  <div key={key} className={`wo-card${woType === key ? " selected" : ""}`} onClick={() => { setWoType(key); setWoConfig(WO_DEFAULTS[key] ? { ...WO_DEFAULTS[key] } : { templateId: "", startTime: "", defaultDate: "", techType: "Tech", numTechs: wot.numTechs?.toString() || "1", numDays: wot.numDays?.toString() || "1", budgetTech: "", payRate: "", approxHours: "", country: "" }); }}>
                     <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${woType === key ? T.accent : T.textFaint}`, background: woType === key ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       {woType === key && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#000" }} />}
                     </div>
@@ -1630,7 +1780,7 @@ export default function App() {
                   Configure <span style={{ color: T.accentHi }}>{woType}</span> Work Order
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  {/* Template ID with history dropdown */}
+                  {/* Template ID with FN bank + history dropdown */}
                   <div style={{ position: "relative" }}>
                     <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 5 }}>Template ID</label>
                     <div style={{ display: "flex", gap: 6 }}>
@@ -1642,30 +1792,42 @@ export default function App() {
                         onFocus={e => { e.target.style.borderColor=T.accent; }}
                         onBlur={e => { e.target.style.borderColor=T.border2; setTimeout(() => setShowTidDropdown(false), 150); }}
                       />
-                      {(templateIdHistory[woType]?.length > 0) && (
-                        <button
-                          onClick={() => setShowTidDropdown(d => !d)}
-                          style={{ background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "0 10px", color: T.textMid, cursor: "pointer", fontSize: 13, flexShrink: 0 }}
-                          title="Recent template IDs"
-                        >▾</button>
-                      )}
+                      <button onClick={() => setShowTidDropdown(d => !d)} style={{ background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "0 10px", color: T.textMid, cursor: "pointer", fontSize: 13, flexShrink: 0 }} title="Choose template">▾</button>
                     </div>
-                    {showTidDropdown && templateIdHistory[woType]?.length > 0 && (
-                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 7, zIndex: 100, marginTop: 3, overflow: "hidden" }}>
-                        {templateIdHistory[woType].map((entry, i) => {
-                          const tid = typeof entry === "string" ? entry : entry.id;
-                          const lbl = typeof entry === "string" ? "" : entry.label;
-                          return (
-                            <div key={tid} onClick={() => { setWoConfig(prev => ({ ...prev, templateId: tid })); setShowTidDropdown(false); }}
-                              style={{ padding: "8px 12px", cursor: "pointer", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}
-                              onMouseEnter={e => e.currentTarget.style.background=T.rowHover}
-                              onMouseLeave={e => e.currentTarget.style.background="transparent"}
-                            >
-                              <span style={{ fontSize: 12, color: T.text, fontWeight: 600 }}>{tid}</span>
-                              {lbl && <span style={{ fontSize: 11, color: T.textDim, marginLeft: 8 }}>{lbl}</span>}
-                            </div>
-                          );
-                        })}
+                    {showTidDropdown && (
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 7, zIndex: 100, marginTop: 3, overflow: "hidden", maxHeight: 280, overflowY: "auto" }}>
+                        {/* FN Template Bank */}
+                        <div style={{ padding: "6px 12px", fontSize: 10, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.5, borderBottom: `1px solid ${T.border}`, background: T.surface2 }}>FieldNation Templates</div>
+                        {FN_TEMPLATE_BANK.map(t => (
+                          <div key={t.id} onClick={() => { setWoConfig(prev => ({ ...prev, templateId: t.id })); setShowTidDropdown(false); }}
+                            style={{ padding: "9px 12px", cursor: "pointer", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                            onMouseEnter={e => e.currentTarget.style.background=T.rowHover}
+                            onMouseLeave={e => e.currentTarget.style.background="transparent"}
+                          >
+                            <span style={{ fontSize: 12, color: T.text, fontWeight: 600 }}>{t.id}</span>
+                            <span style={{ fontSize: 11, color: T.textDim }}>{t.name}</span>
+                          </div>
+                        ))}
+                        {/* History — previously used IDs */}
+                        {templateIdHistory[woType]?.length > 0 && <>
+                          <div style={{ padding: "6px 12px", fontSize: 10, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.5, borderBottom: `1px solid ${T.border}`, background: T.surface2 }}>Recently Used</div>
+                          {templateIdHistory[woType].map((entry) => {
+                            const tid = typeof entry === "string" ? entry : entry.id;
+                            const lbl = typeof entry === "string" ? "" : entry.label;
+                            // Skip if already in bank
+                            if (FN_TEMPLATE_BANK.find(t => t.id === tid)) return null;
+                            return (
+                              <div key={tid} onClick={() => { setWoConfig(prev => ({ ...prev, templateId: tid })); setShowTidDropdown(false); }}
+                                style={{ padding: "9px 12px", cursor: "pointer", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                                onMouseEnter={e => e.currentTarget.style.background=T.rowHover}
+                                onMouseLeave={e => e.currentTarget.style.background="transparent"}
+                              >
+                                <span style={{ fontSize: 12, color: T.text, fontWeight: 600 }}>{tid}</span>
+                                {lbl && <span style={{ fontSize: 11, color: T.textDim, marginLeft: 8 }}>{lbl}</span>}
+                              </div>
+                            );
+                          })}
+                        </>}
                       </div>
                     )}
                     <div style={{ fontSize: 10, color: T.textFaint, marginTop: 3 }}>FieldNation template number · saved on continue</div>
@@ -3023,7 +3185,7 @@ export default function App() {
                       saveCustomWoTypes(next);
                     }
                     setWoType(k);
-                    setWoConfig(WO_DEFAULTS[k] ? { ...WO_DEFAULTS[k] } : { templateId: "", startTime: "", defaultDate: "", techType: "", numTechs: entry.numTechs.toString(), numDays: entry.numDays.toString(), budgetTech: "", payRate: "", approxHours: "", country: "" });
+                    setWoConfig(WO_DEFAULTS[k] ? { ...WO_DEFAULTS[k] } : { templateId: "", startTime: "", defaultDate: "", techType: "Tech", numTechs: entry.numTechs.toString(), numDays: entry.numDays.toString(), budgetTech: "", payRate: "", approxHours: "", country: "" });
                     setShowCustomModal(false);
                   }}
                   style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: (customForm.key.trim() || editingCustomKey) ? `linear-gradient(135deg,${T.accent},#dc6209)` : T.disabledBg, color: (customForm.key.trim() || editingCustomKey) ? "#000" : T.disabledText, cursor: (customForm.key.trim() || editingCustomKey) ? "pointer" : "not-allowed", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}
