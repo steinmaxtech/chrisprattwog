@@ -20,7 +20,7 @@ export default function Step0Guided({ T, woType, setWoType, setWoConfig, WO_DEFA
                           <span style={{ fontSize: 10, color: T.textFaint }}>{tpl.woType}{tpl.includeDEL ? " + DEL" : ""}{tpl.includeBRK ? " + BRK" : ""}{tpl.includeWRK ? " + WRK" : ""}</span>
                         </button>
                       ))}
-                    </div>
+                    </div>{/* - */}
                   </div>
                 )}
 
@@ -40,8 +40,7 @@ export default function Step0Guided({ T, woType, setWoType, setWoConfig, WO_DEFA
                         ))}
                       </div>
                     )}
-                  {null}
-                  </div>
+                  </div>{/* - */}
                 </div>
 
                 {/* WO Type — plain English cards */}
@@ -73,9 +72,9 @@ export default function Step0Guided({ T, woType, setWoType, setWoConfig, WO_DEFA
                         </div>
                       );
                     })}
-                  </div>
-                {null}
-                </div>
+                  </div>{/* - */}
+                </div>{/* - */}
               </div>
   );
 }
+

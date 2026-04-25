@@ -1506,9 +1506,8 @@ export default function App() {
           <button onClick={() => setDark(d => !d)} style={{ background: "transparent", border: "none", color: dark ? "#52525b" : "#71717a", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>
             {dark ? "☀ Light" : "🌙 Dark"}
           </button>
-        </div>
-      {null}
-      </div>
+        </div>{/* - */}
+      </div>{/* - */}
     </div>
   );
 
@@ -1555,9 +1554,8 @@ export default function App() {
             <button onClick={() => { if (adminUnlocked) { setAdminUnlocked(false); } else { setLockPwInput(""); setLockPwError(false); setShowLockModal(true); } }} style={{ background: adminUnlocked ? "rgba(234,88,12,0.15)" : "transparent", border: `1px solid ${adminUnlocked ? T.accent : T.border2}`, borderRadius: 20, padding: "5px 12px", color: adminUnlocked ? T.accent : T.textMid, cursor: "pointer", fontSize: 15, display: "flex", alignItems: "center", gap: 5 }}>
               {adminUnlocked ? "🔓" : "🔒"}
             </button>
-          </div>
-        {null}
-        </div>
+          </div>{/* - */}
+        </div>{/* - */}
       </div>
 
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "2rem" }}>
@@ -1698,7 +1696,7 @@ export default function App() {
                   <button onClick={() => setPasteMode(false)} style={{ background: T.disabledBg, border: `1px solid ${T.border2}`, borderRadius: 6, padding: "8px 16px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>
                     Skip — Enter Manually
                   </button>
-                </div>
+                </div>{/* - */}
               </div>
             ) : (
               <div>
@@ -1725,7 +1723,7 @@ export default function App() {
                     <button onClick={() => setShowBulkDate(d => !d)} style={{ background: showBulkDate ? `${T.accent}22` : T.disabledBg, border: `1px solid ${showBulkDate ? T.accent : T.border2}`, borderRadius: 6, padding: "6px 14px", color: showBulkDate ? T.accentHi : T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>📅 Bulk Date</button>
                     <button onClick={() => { setLibrarySaveName(projectId || ""); setShowSaveLibrary(s => !s); }} style={{ background: T.disabledBg, border: `1px solid ${T.border2}`, borderRadius: 6, padding: "6px 14px", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>🏗 Save to Library</button>
                     <button onClick={verifyAll} disabled={!anyUnverified} style={{ background: anyUnverified ? "linear-gradient(135deg,#1d4ed8,#1e40af)" : T.disabledBg, border: "none", borderRadius: 6, padding: "6px 16px", color: anyUnverified ? "#fff" : T.disabledText, cursor: anyUnverified ? "pointer" : "not-allowed", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}>✦ Verify All</button>
-                  </div>
+                  </div>{/* - */}
                 </div>
 
                 <div style={{ overflowX: "auto", borderRadius: 10, border: `1px solid ${T.border}` }}>
@@ -1792,7 +1790,7 @@ export default function App() {
                   <span>Verified: <b style={{ color: "#22c55e" }}>{sites.filter(s => s.verified === true).length}</b></span>
                   {duplicateCodes.size > 0 && <span style={{ color: "#f59e0b" }}>⚠ {duplicateCodes.size} duplicate code{duplicateCodes.size > 1 ? "s" : ""}: {[...duplicateCodes].join(", ")}</span>}
                   {(() => { const past = sites.filter(s => isPastDate(s.date || woConfig.defaultDate)); return past.length > 0 ? <span style={{ color: "#ef4444" }}>⚠ {past.length} past date{past.length > 1 ? "s" : ""}</span> : null; })()}
-                </div>
+                </div>{/* - */}
               </div>
             )}
           </div>
@@ -1811,7 +1809,7 @@ export default function App() {
                 <div style={{ fontSize: 10, color: T.textFaint, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Work Order Type</div>
                 <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 18, letterSpacing: 2, color: T.accent }}>{woType}</div>
                 <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>{ALL_WO_TYPES[woType]?.label || woType}</div>
-              </div>
+              </div>{/* - */}
             </div>
 
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1.1rem", marginBottom: 14 }}>
@@ -1933,10 +1931,10 @@ export default function App() {
                         onFocus={e => e.target.style.borderColor = T.accent}
                         onBlur={e => e.target.style.borderColor = s.womId ? T.accent : T.border2}
                       />
-                    </div>
+                    </div>{/* - */}
                   </div>
                 ) : null)}
-              </div>
+              </div>{/* - */}
             </div>
 
             {/* Route WOs button */}
@@ -1958,7 +1956,7 @@ export default function App() {
               <button onClick={() => setStartOverConfirm(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 8, padding: "8px 24px", color: T.textDim, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
                 ↩ Start Over
               </button>
-            </div>
+            </div>{/* - */}
           </div>
         )}
 
@@ -2004,9 +2002,8 @@ export default function App() {
                 <button onClick={() => setStartOverConfirm(false)} style={{ padding: "8px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
                   Cancel
                 </button>
-              </div>
-            {null}
-            </div>
+              </div>{/* - */}
+            </div>{/* - */}
           </div>
         )}
 
@@ -2025,9 +2022,8 @@ export default function App() {
                 <button onClick={() => setClearConfirm(false)} style={{ padding: "10px 18px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
                   Cancel
                 </button>
-              </div>
-            {null}
-            </div>
+              </div>{/* - */}
+            </div>{/* - */}
           </div>
         )}
 
@@ -2049,7 +2045,7 @@ export default function App() {
                 <div style={{ display: "flex", gap: 8 }}>
                   <input value={templateSaveName} onChange={e => setTemplateSaveName(e.target.value)} placeholder="Template name (e.g. PNC LVV Standard)" style={{ ...T.inp, flex: 1 }} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => e.target.style.borderColor=T.border2} onKeyDown={e => { if (e.key === "Enter" && templateSaveName.trim()) { saveCurrentAsTemplate(templateSaveName); setTemplateSaveName(""); }}} />
                   <button onClick={() => { if (templateSaveName.trim()) { saveCurrentAsTemplate(templateSaveName); setTemplateSaveName(""); }}} disabled={!templateSaveName.trim()} style={{ padding: "8px 16px", borderRadius: 7, border: "none", background: templateSaveName.trim() ? `linear-gradient(135deg,${T.accent},#dc6209)` : T.disabledBg, color: templateSaveName.trim() ? "#000" : T.disabledText, cursor: templateSaveName.trim() ? "pointer" : "not-allowed", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5 }}>SAVE</button>
-                </div>
+                </div>{/* - */}
               </div>
               {/* Template list */}
               <div style={{ flex: 1, padding: "1rem 1.5rem", display: "flex", flexDirection: "column", gap: 8 }}>
@@ -2068,9 +2064,8 @@ export default function App() {
                     <button onClick={() => applyTemplate(tpl)} style={{ width: "100%", padding: "7px", borderRadius: 7, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5 }}>↩ APPLY TEMPLATE</button>
                   </div>
                 ))}
-              </div>
-            {null}
-            </div>
+              </div>{/* - */}
+            </div>{/* - */}
           </div>
         )}
 
@@ -2139,7 +2134,7 @@ export default function App() {
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           <button onClick={e => { e.stopPropagation(); deleteFromLibrary(entry.id); }} style={{ background: "transparent", border: "1px solid #ef4444", borderRadius: 5, padding: "2px 7px", color: "#ef4444", cursor: "pointer", fontSize: 10 }}>✕</button>
                           <span onClick={() => { const next = new Set(libExpanded); if (isExpanded) next.delete(eid); else next.add(eid); setLibExpanded(next); }} style={{ color: T.textFaint, cursor: "pointer", fontSize: 12 }}>{isExpanded ? "▾" : "▸"}</span>
-                        </div>
+                        </div>{/* - */}
                       </div>
 
                       {/* Site list — shown when expanded */}
@@ -2175,7 +2170,7 @@ export default function App() {
                                   <span style={{ fontSize: 12, color: checked ? T.accentHi : T.text, fontWeight: 600 }}>{site.code}</span>
                                   {site.branchName && <span style={{ fontSize: 11, color: T.textDim, marginLeft: 8 }}>{site.branchName}</span>}
                                   <div style={{ fontSize: 10, color: T.textFaint, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{site.address}, {site.city}, {site.state} {site.zip}</div>
-                                </div>
+                                </div>{/* - */}
                               </div>
                             );
                           })}
@@ -2195,9 +2190,9 @@ export default function App() {
                   style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: selCount > 0 ? `linear-gradient(135deg,${T.accent},#dc6209)` : T.disabledBg, color: selCount > 0 ? "#000" : T.disabledText, cursor: selCount > 0 ? "pointer" : "not-allowed", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}>
                   {selCount > 0 ? `↩ ADD ${selCount} SITE${selCount > 1 ? "S" : ""}` : "SELECT SITES ABOVE"}
                 </button>
-              </div>
+              </div>{/* - */}
 
-            </div>
+            </div>{/* - */}
           </div>
           );
         })()}
@@ -2231,10 +2226,10 @@ export default function App() {
                         <div style={{ fontSize: 11, color: T.textFaint, lineHeight: 1.6 }}>
                           <span style={{ color: T.textDim }}>Delim:</span> {p.delim} &nbsp;·&nbsp; <span style={{ color: T.textDim }}>Cols:</span> {p.cols}<br/>
                           <span style={{ color: T.textDim }}>Detected by:</span> {p.signal}
-                        </div>
+                        </div>{/* - */}
                       </div>
                     ))}
-                  </div>
+                  </div>{/* - */}
                 </div>
 
                 {/* Custom parsers */}
@@ -2251,11 +2246,11 @@ export default function App() {
                           <div style={{ display: "flex", gap: 6 }}>
                             <button onClick={() => { setEditingParser(p.id); setParserForm({ ...p }); setParserPreview([]); }} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 5, padding: "2px 10px", color: T.textDim, cursor: "pointer", fontSize: 10 }}>edit</button>
                             <button onClick={() => { const next = customParsers.filter(x => x.id !== p.id); saveCustomParsers(next); }} style={{ background: "transparent", border: "1px solid #ef4444", borderRadius: 5, padding: "2px 10px", color: "#ef4444", cursor: "pointer", fontSize: 10 }}>✕</button>
-                          </div>
+                          </div>{/* - */}
                         </div>
                         <div style={{ fontSize: 11, color: T.textFaint, lineHeight: 1.6 }}>
                           Delim: {p.delim} &nbsp;·&nbsp; Code col: {p.colCode}{p.colFullAddr ? ` · Full addr col: ${p.colFullAddr}` : ` · Addr: ${p.colAddr} · City: ${p.colCity} · ST: ${p.colState} · ZIP: ${p.colZip}`}{p.colDate ? ` · Date: ${p.colDate}` : ""}
-                        </div>
+                        </div>{/* - */}
                       </div>
                     ))}
                   </div>
@@ -2274,7 +2269,7 @@ export default function App() {
                           {["tab", "comma"].map(d => (
                             <button key={d} onClick={() => setParserForm(p => ({ ...p, delim: d }))} style={{ flex: 1, padding: "8px", borderRadius: 7, border: `2px solid ${parserForm.delim === d ? T.accent : T.border2}`, background: parserForm.delim === d ? `${T.accent}22` : "transparent", color: parserForm.delim === d ? T.accentHi : T.textMid, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>{d}</button>
                           ))}
-                        </div>
+                        </div>{/* - */}
                       </div>
                       <div>
                         <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Detection Signal (optional)</label>
@@ -2345,15 +2340,11 @@ export default function App() {
                         style={{ flex: 2, padding: "9px", borderRadius: 8, border: "none", background: parserForm.name?.trim() ? `linear-gradient(135deg,${T.accent},#dc6209)` : T.disabledBg, color: parserForm.name?.trim() ? "#000" : T.disabledText, cursor: parserForm.name?.trim() ? "pointer" : "not-allowed", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2 }}>
                         {editingParser ? "SAVE CHANGES" : "SAVE PARSER"}
                       </button>
-                    </div>
-                  {null}
-                  </div>
-                {null}
-                </div>
-              {null}
-              </div>
-            {null}
-            </div>
+                    </div>{/* - */}
+                  </div>{/* - */}
+                </div>{/* - */}
+              </div>{/* - */}
+            </div>{/* - */}
           </div>
         )}
 
@@ -2445,13 +2436,12 @@ export default function App() {
                           setStep(0);
                           setShowHistoryPanel(false);
                         }} style={{ flex: 1, padding: "7px", borderRadius: 7, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontFamily: "inherit", fontSize: 11 }}>Config only</button>
-                      </div>
+                      </div>{/* - */}
                     </div>
                   ))
                 }
-              </div>
-            {null}
-            </div>
+              </div>{/* - */}
+            </div>{/* - */}
           </div>
         )}
 
@@ -2533,7 +2523,7 @@ export default function App() {
                             />
                           </div>
                         ))}
-                      </div>
+                      </div>{/* - */}
                     </div>
                   );
                 })}
@@ -2542,9 +2532,9 @@ export default function App() {
               {/* Footer */}
               <div style={{ padding: "1rem 1.5rem", borderTop: `1px solid ${T.border}`, position: "sticky", bottom: 0, background: T.surface }}>
                 <button onClick={() => setShowRoutePanel(false)} style={{ width: "100%", padding: "10px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}>DONE</button>
-              </div>
+              </div>{/* - */}
 
-            </div>
+            </div>{/* - */}
           </div>
         )}
 
@@ -2583,9 +2573,8 @@ export default function App() {
                   if (lockPwInput === adminPw) { setAdminUnlocked(true); setShowLockModal(false); }
                   else setLockPwError(true);
                 }} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}>UNLOCK</button>
-              </div>
-            {null}
-            </div>
+              </div>{/* - */}
+            </div>{/* - */}
           </div>
         )}
 
@@ -2612,9 +2601,8 @@ export default function App() {
                   if (woType === k) setWoType(Object.keys(ALL_WO_TYPES).find(x => x !== k) || "LVL");
                   setDeleteConfirm(null);
                 }} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2 }}>CONFIRM DELETE</button>
-              </div>
-            {null}
-            </div>
+              </div>{/* - */}
+            </div>{/* - */}
           </div>
         )}
 
@@ -2640,7 +2628,7 @@ export default function App() {
                 ))}
               </div>
               <button onClick={() => setShowRecoverModal(false)} style={{ width: "100%", padding: "10px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>Close</button>
-            </div>
+            </div>{/* - */}
           </div>
         )}
 
@@ -2675,7 +2663,7 @@ export default function App() {
                     {customForm.useBundle && <span style={{ color: "#000", fontSize: 11, fontWeight: 700 }}>✓</span>}
                   </div>
                   <span style={{ fontSize: 12, color: T.textMid }}>Bundle work orders by Site ID</span>
-                </div>
+                </div>{/* - */}
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
                 <button onClick={() => setShowCustomModal(false)} style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>Cancel</button>
@@ -2707,9 +2695,8 @@ export default function App() {
                 >
                   {editingCustomKey ? "SAVE CHANGES" : "CREATE TYPE"}
                 </button>
-              </div>
-            {null}
-            </div>
+              </div>{/* - */}
+            </div>{/* - */}
           </div>
         )}
 
@@ -2739,9 +2726,8 @@ export default function App() {
                 <button onClick={() => confirmTidLabel(true)} style={{ padding: "9px 16px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>
                   Skip
                 </button>
-              </div>
-            {null}
-            </div>
+              </div>{/* - */}
+            </div>{/* - */}
           </div>
         )}
 
@@ -2757,9 +2743,9 @@ export default function App() {
           <button onClick={() => { sessionStorage.removeItem("cpwog_session"); setAuthed(false); setPwInput(""); setStep(0); setProjectId(""); setDisplayName(""); setWoType("LVL"); setWoConfig({ ...WO_DEFAULTS["LVL"] }); setSites([EMPTY_SITE()]); }} style={{ background: "transparent", border: "none", color: T.textFaint, cursor: "pointer", fontSize: 11, fontFamily: "inherit", textDecoration: "underline" }}>
             Log out
           </button>
-        </div>
-      {null}
-      </div>
+        </div>{/* - */}
+      </div>{/* - */}
     </div>
   );
 }
+

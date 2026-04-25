@@ -171,7 +171,7 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
                       ))}
                     </div>
                     <div style={{ fontSize: 10, color: T.textFaint, marginTop: 4 }}>Sets the Pay Type column in the exported CSV</div>
-                  </div>
+                  </div>{/* - */}
                 </div>
                 <div style={{ marginTop: 12, padding: "8px 12px", background: T.surface2, borderRadius: 7, fontSize: 11, color: T.textFaint, lineHeight: 1.7 }}>
                   Pattern: <span style={{ color: T.textMid }}>{woConfig.numTechs} tech{Number(woConfig.numTechs) > 1 ? "s" : ""} × {woConfig.numDays} day{Number(woConfig.numDays) > 1 ? "s" : ""}</span>
@@ -188,7 +188,7 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
                       <div>
                         <div style={{ fontSize: 12, color: includeBRK ? T.text : T.textMid, fontWeight: 600 }}>Also generate BRK (Backboard) work order on Day 1</div>
                         <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>Creates 1 BRK WO per site on Day 1 · configure below when enabled</div>
-                      </div>
+                      </div>{/* - */}
                     </div>
                     {includeBRK && (
                       <div style={{ marginTop: 10, background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1rem" }}>
@@ -230,11 +230,9 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
                               {["Fixed", "Hourly"].map(pt => (
                                 <button key={pt} onClick={() => setBrkConfig(prev => ({ ...prev, payType: pt }))} style={{ flex: 1, padding: "8px", borderRadius: 8, border: `2px solid ${(brkConfig.payType || "Fixed") === pt ? T.accent : T.border2}`, background: (brkConfig.payType || "Fixed") === pt ? `${T.accent}22` : "transparent", color: (brkConfig.payType || "Fixed") === pt ? T.accentHi : T.textMid, cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, transition: "all .15s" }}>{pt}</button>
                               ))}
-                            </div>
-                          {null}
-                          </div>
-                        {null}
-                        </div>
+                            </div>{/* - */}
+                          </div>{/* - */}
+                        </div>{/* - */}
                       </div>
                     )}
                     {/* WRK checkbox + config */}
@@ -245,7 +243,7 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
                       <div>
                         <div style={{ fontSize: 12, color: includeWRK ? T.text : T.textMid, fontWeight: 600 }}>Also generate WRK (Walk In Ready Kit) work order on Day 1</div>
                         <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>Creates 1 WRK WO per site on Day 1 · configure below when enabled</div>
-                      </div>
+                      </div>{/* - */}
                     </div>
                     {includeWRK && (
                       <div style={{ marginTop: 10, background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1rem" }}>
@@ -288,11 +286,9 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
                               {["Fixed", "Hourly"].map(pt => (
                                 <button key={pt} onClick={() => setWrkConfig(prev => ({ ...prev, payType: pt }))} style={{ flex: 1, padding: "8px", borderRadius: 8, border: `2px solid ${(wrkConfig.payType || "Fixed") === pt ? T.accent : T.border2}`, background: (wrkConfig.payType || "Fixed") === pt ? `${T.accent}22` : "transparent", color: (wrkConfig.payType || "Fixed") === pt ? T.accentHi : T.textMid, cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, transition: "all .15s" }}>{pt}</button>
                               ))}
-                            </div>
-                          {null}
-                          </div>
-                        {null}
-                        </div>
+                            </div>{/* - */}
+                          </div>{/* - */}
+                        </div>{/* - */}
                       </div>
                     )}
                     {/* DEL checkbox + config */}
@@ -303,7 +299,7 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
                       <div>
                         <div style={{ fontSize: 12, color: includeDEL ? T.text : T.textMid, fontWeight: 600 }}>Also generate DEL work order on Day 1</div>
                         <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>Creates 1 DEL WO per site on Day 1 · configure below when enabled</div>
-                      </div>
+                      </div>{/* - */}
                     </div>
                     {includeDEL && (
                       <div style={{ marginTop: 10, background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1rem" }}>
@@ -379,18 +375,15 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
                                   {pt}
                                 </button>
                               ))}
-                            </div>
-                          {null}
-                          </div>
-                        {null}
-                        </div>
+                            </div>{/* - */}
+                          </div>{/* - */}
+                        </div>{/* - */}
                       </div>
                     )}
-                {null}
-                </div>
-              </div>
-            {null}
+                </div>{/* - */}
+              </div>{/* - */}
             </div>
         )}
   );
 }
+
