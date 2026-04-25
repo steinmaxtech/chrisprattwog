@@ -128,10 +128,11 @@ const WO_HEADERS = [
   "Scheduled Start Time","Scheduled End Time","Tech \nType","Tech Name","Route To Provider (ID)",
   "Budget (Tech)","Budget (Travel)","Max Budget","Pay Rate","Additional Charges","Devices",
   "EST Hours","Size","Approximate Hours to Complete","Estimated Duration","Pay Type",
-  "Location Display Name","Location Name"
+  "Location Display Name","Location Name","Work Order Manager"
 ];
 
 function makeRow({ templateId, projectId, siteId, bundle, site, date, startTime, techType, budgetTech, maxBudget, payRate, approxHours, estDuration, country, locName, payType, routeTo }) {
+  const womId = site.womId || "";
   return [
     templateId, projectId, siteId, bundle,
     site.address, site.address2 || "", site.city, site.state, site.zip,
@@ -139,7 +140,7 @@ function makeRow({ templateId, projectId, siteId, bundle, site, date, startTime,
     techType, "", routeTo || "",
     budgetTech, "", maxBudget, payRate,
     "", "", "", "", approxHours, estDuration, payType || "Fixed",
-    locName, locName
+    locName, locName, womId
   ];
 }
 
@@ -206,7 +207,7 @@ function toCSV(headers, rows) {
 const EMPTY_SITE = () => ({
   code: "", branchName: "", address: "", address2: "",
   city: "", state: "", zip: "", date: "",
-  numTechs: "", numDays: "", budgetTech: "", payRate: "", routeToTechs: [],
+  numTechs: "", numDays: "", budgetTech: "", payRate: "", womId: "", routeToTechs: [],
   verified: null, verifying: false, verifyError: ""
 });
 
@@ -223,6 +224,7 @@ const COLS = [
   { key: "numDays",    label: "Days",        width: 54,  ph: "↓" },
   { key: "budgetTech", label: "Budget $",    width: 80,  ph: "↓" },
   { key: "payRate",    label: "Pay $",       width: 80,  ph: "↓" },
+  { key: "womId",     label: "WOM ID",      width: 100, ph: "WO-12345" },
 ];
 
 
@@ -1912,16 +1914,26 @@ export default function App() {
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1.1rem", marginBottom: 20 }}>
               <div style={{ fontSize: 10, color: T.textFaint, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Sites ({sites.filter(rowComplete).length}){sites.filter(s => rowComplete(s) && (s.routeToTechs||[]).some(Boolean)).length > 0 ? <span style={{ color: T.accent, marginLeft: 8 }}>· {sites.filter(s => rowComplete(s) && (s.routeToTechs||[]).some(Boolean)).length} pre-routed 🎯</span> : ""}</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 8 }}>
-                {sites.filter(rowComplete).map((s, i) => (
-                  <div key={i} style={{ background: T.surface2, borderRadius: 6, padding: "8px 10px", borderLeft: `3px solid ${s.verified === true ? "#22c55e" : "T.border2"}` }}>
+                {sites.map((s, realIdx) => rowComplete(s) ? (
+                  <div key={realIdx} style={{ background: T.surface2, borderRadius: 6, padding: "8px 10px", borderLeft: `3px solid ${s.womId ? T.accent : s.verified === true ? "#22c55e" : T.border}` }}>
                     <div style={{ fontSize: 12, color: T.accent, fontWeight: 600 }}>{s.code}{s.branchName ? ` — ${s.branchName}` : ""}</div>
                     <div style={{ fontSize: 11, color: T.textDim, marginTop: 2, lineHeight: 1.5 }}>{s.address}{s.address2 ? `, ${s.address2}` : ""}<br />{s.city}, {s.state} {s.zip}</div>
                     <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>Start: {s.date}</div>
                     {(s.budgetTech || s.payRate) && (
                       <div style={{ fontSize: 10, color: T.accent, marginTop: 2 }}>⚡ {s.budgetTech ? `$${s.budgetTech}` : `$${woConfig.budgetTech}`} / {s.payRate ? `$${s.payRate}` : `$${woConfig.payRate}`}</div>
                     )}
+                    <div style={{ marginTop: 6 }}>
+                      <input
+                        value={s.womId || ""}
+                        onChange={e => setSites(prev => prev.map((x, xi) => xi === realIdx ? { ...x, womId: e.target.value } : x))}
+                        placeholder="Work Order Manager ID"
+                        style={{ width: "100%", background: s.womId ? `${T.accent}12` : T.surface, border: `1px solid ${s.womId ? T.accent : T.border2}`, borderRadius: 5, padding: "4px 8px", color: T.text, fontSize: 10, fontFamily: "inherit" }}
+                        onFocus={e => e.target.style.borderColor = T.accent}
+                        onBlur={e => e.target.style.borderColor = s.womId ? T.accent : T.border2}
+                      />
+                    </div>
                   </div>
-                ))}
+                ) : null)}
               </div>
             </div>
 
