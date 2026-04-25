@@ -1507,6 +1507,7 @@ export default function App() {
             {dark ? "☀ Light" : "🌙 Dark"}
           </button>
         </div>
+      {null}
       </div>
     </div>
   );
@@ -1555,6 +1556,7 @@ export default function App() {
               {adminUnlocked ? "🔓" : "🔒"}
             </button>
           </div>
+        {null}
         </div>
       </div>
 
@@ -2003,6 +2005,7 @@ export default function App() {
                   Cancel
                 </button>
               </div>
+            {null}
             </div>
           </div>
         )}
@@ -2023,6 +2026,7 @@ export default function App() {
                   Cancel
                 </button>
               </div>
+            {null}
             </div>
           </div>
         )}
@@ -2065,6 +2069,7 @@ export default function App() {
                   </div>
                 ))}
               </div>
+            {null}
             </div>
           </div>
         )}
@@ -2341,9 +2346,13 @@ export default function App() {
                         {editingParser ? "SAVE CHANGES" : "SAVE PARSER"}
                       </button>
                     </div>
+                  {null}
                   </div>
+                {null}
                 </div>
+              {null}
               </div>
+            {null}
             </div>
           </div>
         )}
@@ -2441,6 +2450,7 @@ export default function App() {
                   ))
                 }
               </div>
+            {null}
             </div>
           </div>
         )}
@@ -2574,6 +2584,7 @@ export default function App() {
                   else setLockPwError(true);
                 }} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}>UNLOCK</button>
               </div>
+            {null}
             </div>
           </div>
         )}
@@ -2602,6 +2613,7 @@ export default function App() {
                   setDeleteConfirm(null);
                 }} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2 }}>CONFIRM DELETE</button>
               </div>
+            {null}
             </div>
           </div>
         )}
@@ -2696,6 +2708,7 @@ export default function App() {
                   {editingCustomKey ? "SAVE CHANGES" : "CREATE TYPE"}
                 </button>
               </div>
+            {null}
             </div>
           </div>
         )}
@@ -2727,6 +2740,7 @@ export default function App() {
                   Skip
                 </button>
               </div>
+            {null}
             </div>
           </div>
         )}
@@ -2744,6 +2758,7 @@ export default function App() {
             Log out
           </button>
         </div>
+      {null}
       </div>
     </div>
   );

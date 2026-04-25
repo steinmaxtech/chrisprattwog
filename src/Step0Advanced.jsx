@@ -231,7 +231,9 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
                                 <button key={pt} onClick={() => setBrkConfig(prev => ({ ...prev, payType: pt }))} style={{ flex: 1, padding: "8px", borderRadius: 8, border: `2px solid ${(brkConfig.payType || "Fixed") === pt ? T.accent : T.border2}`, background: (brkConfig.payType || "Fixed") === pt ? `${T.accent}22` : "transparent", color: (brkConfig.payType || "Fixed") === pt ? T.accentHi : T.textMid, cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, transition: "all .15s" }}>{pt}</button>
                               ))}
                             </div>
+                          {null}
                           </div>
+                        {null}
                         </div>
                       </div>
                     )}
@@ -287,7 +289,9 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
                                 <button key={pt} onClick={() => setWrkConfig(prev => ({ ...prev, payType: pt }))} style={{ flex: 1, padding: "8px", borderRadius: 8, border: `2px solid ${(wrkConfig.payType || "Fixed") === pt ? T.accent : T.border2}`, background: (wrkConfig.payType || "Fixed") === pt ? `${T.accent}22` : "transparent", color: (wrkConfig.payType || "Fixed") === pt ? T.accentHi : T.textMid, cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, transition: "all .15s" }}>{pt}</button>
                               ))}
                             </div>
+                          {null}
                           </div>
+                        {null}
                         </div>
                       </div>
                     )}
@@ -376,13 +380,16 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
                                 </button>
                               ))}
                             </div>
+                          {null}
                           </div>
+                        {null}
                         </div>
                       </div>
                     )}
                 {null}
                 </div>
               </div>
+            {null}
             </div>
         )}
   );
