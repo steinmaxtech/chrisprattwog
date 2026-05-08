@@ -1,8 +1,21 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import * as Sentry from "@sentry/react";
 import Step0Guided from './Step0Guided';
 import Step0Advanced from './Step0Advanced';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
+// Lightweight error reporter — sends to Sentry if configured, always console.errors
+function captureError(context, error, extras = {}) {
+  console.error(`[CPWOG:${context}]`, error, extras);
+  if (typeof Sentry !== "undefined" && Sentry.captureException) {
+    Sentry.withScope(scope => {
+      scope.setTag("context", context);
+      scope.setExtras(extras);
+      Sentry.captureException(error instanceof Error ? error : new Error(String(error)));
+    });
+  }
+}
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const sbFetch = (path, opts = {}) => fetch(`${SUPABASE_URL}/rest/v1${path}`, {
@@ -700,6 +713,7 @@ export default function App() {
       setParserForm(prev => ({ ...prev, ...parsed, sampleData: prev.sampleData }));
       runParserPreview({ ...parserForm, ...parsed });
     } catch (e) {
+      captureError("ai_parse", e, { status: e.message });
       setAiParserError("AI parse failed: " + e.message + " — fill in columns manually.");
     }
     setAiParserLoading(false);
@@ -993,6 +1007,7 @@ export default function App() {
         setPasteMode(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
       } catch (err) {
+        captureError("csv_import", err, { filename: file?.name });
         alert("Failed to parse CSV: " + err.message);
       }
     };
@@ -1351,6 +1366,7 @@ export default function App() {
         ? { ...x, verifying: false, verified: true, address: address || x.address, city: city || x.city, state: state || x.state, zip: zip || x.zip, verifyError: "" }
         : x));
     } catch (e) {
+      captureError("verify_address", e, { address: [s.address, s.city, s.state, s.zip].join(", "), siteCode: s.code });
       setSites(prev => prev.map((x, idx) => idx === i ? { ...x, verifying: false, verified: false, verifyError: e.message } : x));
     }
   };
@@ -1523,6 +1539,7 @@ export default function App() {
       console.log("saveJob called, files:", compressedFiles.length);
       saveJob({ csv_files: compressedFiles });
     } catch (err) {
+      captureError("csv_download", err, { woType, siteCount: sites.filter(s => s.code || s.address).length });
       alert("Error: " + err.message);
     }
     setGenerating(false);
@@ -1808,7 +1825,7 @@ export default function App() {
                           if (parsed.length === 0) { setPasteError("Parser matched 0 rows — check column indices in ⚙ Parsers"); return; }
                           setSites(prev => { const ex = prev.filter(s => s.code || s.address || s.branchName); return ex.length > 0 ? [...ex, ...parsed] : parsed; });
                           setPasteMode(false); setPasteText("");
-                        } catch(e) { setPasteError("Parser error: " + e.message); }
+                        } catch(e) { captureError("custom_parser", e, { parserName: p.name }); setPasteError("Parser error: " + e.message); }
                       }} style={{ padding: "4px 12px", borderRadius: 20, border: `1px solid ${T.border2}`, background: T.surface2, color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>
                         ⚙ {p.name}
                       </button>
@@ -1861,7 +1878,7 @@ export default function App() {
                         if (parsed.length === 0) { setPasteError("AI couldn\'t find site data — try PARSE → instead"); setAiPasteLoading(false); return; }
                         setSites(prev => { const ex = prev.filter(s => s.code || s.address || s.branchName); return ex.length > 0 ? [...ex, ...parsed] : parsed; });
                         setPasteMode(false); setPasteText("");
-                      } catch(e) { setPasteError(e.message.includes("overloaded") ? "✨ Anthropic is busy — wait a few seconds and try again" : "✨ AI Parse failed: " + e.message); }
+                      } catch(e) { captureError("ai_paste", e); setPasteError(e.message.includes("overloaded") ? "✨ Anthropic is busy — wait a few seconds and try again" : "✨ AI Parse failed: " + e.message); }
                       setAiPasteLoading(false);
                     }}
                     style={{ padding: "8px 18px", borderRadius: 6, border: "none", background: aiPasteLoading ? T.disabledBg : "linear-gradient(135deg,#7c3aed,#5b21b6)", color: aiPasteLoading ? T.disabledText : "#fff", cursor: aiPasteLoading || !pasteText.trim() ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5 }}>
