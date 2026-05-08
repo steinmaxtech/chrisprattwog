@@ -403,6 +403,8 @@ export default function App() {
   const [sites, setSites] = useState(() => _s?.sites ?? [EMPTY_SITE()]);
   const [generating, setGenerating] = useState(false);
   const [exporterName, setExporterName] = useState(() => { try { return localStorage.getItem("cpwog_exporter") || ""; } catch { return ""; } });
+  const exporterNameRef = useRef(exporterName);
+  exporterNameRef.current = exporterName;
   const [showExporterModal, setShowExporterModal] = useState(false);
   const [exporterInput, setExporterInput] = useState("");
   const [addonExpanded, setAddonExpanded] = useState(false);
@@ -1440,15 +1442,16 @@ export default function App() {
     true
   ];
 
-  const downloadCSV = useCallback(async () => {
-    if (!exporterName.trim()) { setExporterInput(""); setShowExporterModal(true); return; }
+  const downloadCSV = useCallback(async (nameOverride) => {
+    const name = nameOverride || exporterNameRef.current;
+    if (!name.trim()) { setExporterInput(""); setShowExporterModal(true); return; }
     setGenerating(true);
     try {
       const now = new Date();
       const datePart = now.toISOString().split("T")[0];
       const timePart = now.toTimeString().slice(0, 8).replace(/:/g, "-");
       const safeProject = projectId.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
-      const safeExporter = exporterName.trim().replace(/[^a-zA-Z0-9]/g, "_").slice(0, 20);
+      const safeExporter = name.trim().replace(/[^a-zA-Z0-9]/g, "_").slice(0, 20);
       const triggerDownload = (csvContent, filename) => {
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
@@ -2274,7 +2277,7 @@ export default function App() {
                 autoFocus
                 value={exporterInput}
                 onChange={e => setExporterInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && exporterInput.trim()) { const n = exporterInput.trim(); setExporterName(n); try { localStorage.setItem("cpwog_exporter", n); } catch {} setShowExporterModal(false); setTimeout(downloadCSV, 50); } if (e.key === "Escape") setShowExporterModal(false); }}
+                onKeyDown={e => { if (e.key === "Enter" && exporterInput.trim()) { const n = exporterInput.trim(); setExporterName(n); exporterNameRef.current = n; try { localStorage.setItem("cpwog_exporter", n); } catch {} setShowExporterModal(false); downloadCSV(n); } if (e.key === "Escape") setShowExporterModal(false); }}
                 placeholder="e.g. Jordan"
                 style={{ ...T.inp, width: "100%", fontSize: 15, marginBottom: 12, boxSizing: "border-box" }}
                 onFocus={e => e.target.style.borderColor = T.accent}
@@ -2284,7 +2287,7 @@ export default function App() {
                 <button onClick={() => setShowExporterModal(false)} style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textDim, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>Cancel</button>
                 <button
                   disabled={!exporterInput.trim()}
-                  onClick={() => { const n = exporterInput.trim(); if (!n) return; setExporterName(n); try { localStorage.setItem("cpwog_exporter", n); } catch {} setShowExporterModal(false); setTimeout(downloadCSV, 50); }}
+                  onClick={() => { const n = exporterInput.trim(); if (!n) return; setExporterName(n); exporterNameRef.current = n; try { localStorage.setItem("cpwog_exporter", n); } catch {} setShowExporterModal(false); downloadCSV(n); }}
                   style={{ flex: 2, padding: "10px", borderRadius: 8, border: "none", background: exporterInput.trim() ? `linear-gradient(135deg,${T.accent},#dc6209)` : T.disabledBg, color: exporterInput.trim() ? "#000" : T.disabledText, cursor: exporterInput.trim() ? "pointer" : "not-allowed", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}>
                   SAVE &amp; DOWNLOAD
                 </button>
