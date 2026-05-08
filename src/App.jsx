@@ -65,6 +65,14 @@ async function decompressString(b64) {
 }
 
 // WO type metadata — structure only, no hardcoded values
+const SDT_DEFAULTS = {
+  day1_ah1:  { time: "2:00pm",  hours: 10, budget: 650 },
+  day23_bh1: { time: "11:00am", hours: 8,  budget: 450 },
+  day23_bh2: { time: "11:00am", hours: 8,  budget: 450 },
+  day23_ah1: { time: "4:00pm",  hours: 10, budget: 600 },
+  day23_ah2: { time: "5:00pm",  hours: 9,  budget: 550 },
+};
+
 const WO_TYPES = {
   LVL:  { label: "LVL — Low Voltage Lead",                siteIdSuffix: "LVL(1)", numTechs: 1, numDays: 3, useBundle: true  },
   LVT:  { label: "LVT — Low Voltage Tech",                siteIdSuffix: "LVT",    numTechs: 3, numDays: 3, useBundle: true  },
@@ -90,12 +98,13 @@ const WO_DEFAULTS = {
 };
 
 // Build rows using live woConfig values
-function buildSDTRows(site, projectId, displayName, cfg) {
+function buildSDTRows(site, projectId, displayName, cfg, sdtCfg) {
   // Fixed SDT structure:
   //   Day 1: AH(1)  [2pm, 10hrs, $650]
   //   Day 2: BH(1) + BH(2) [11am, 8hrs, $450 each]  +  AH(1) [4pm, 10hrs, $600]  +  AH(2) [5pm, 9hrs, $550]
   //   Day 3: same pattern as Day 2
   // BH WOs bundled together; AH WOs bundled together.
+  const s = { ...SDT_DEFAULTS, ...(sdtCfg || {}) }; // merge defaults with overrides
   const locPrefix = displayName.trim() || projectId;
   const tId = Number(cfg.templateId) || 104516;
   const country = cfg.country || "US";
@@ -122,29 +131,29 @@ function buildSDTRows(site, projectId, displayName, cfg) {
   };
 
   // Day 1 ─ 1 AH WO
-  push({ siteId: `${site.code}-SDT-AH(1)`, bundle: bundleAH, date: day1, startTime: "2:00pm",  hours: 10, budget: 650 });
+  push({ siteId: `${site.code}-SDT-AH(1)`, bundle: bundleAH, date: day1, startTime: s.day1_ah1.time,  hours: s.day1_ah1.hours,  budget: s.day1_ah1.budget  });
 
   // Day 2 ─ 2 BH + 2 AH WOs
-  push({ siteId: `${site.code}-SDT-BH(1)`, bundle: bundleBH, date: day2, startTime: "11:00am", hours: 8,  budget: 450 });
-  push({ siteId: `${site.code}-SDT-BH(2)`, bundle: bundleBH, date: day2, startTime: "11:00am", hours: 8,  budget: 450 });
-  push({ siteId: `${site.code}-SDT-AH(1)`, bundle: bundleAH, date: day2, startTime: "4:00pm",  hours: 10, budget: 600 });
-  push({ siteId: `${site.code}-SDT-AH(2)`, bundle: bundleAH, date: day2, startTime: "5:00pm",  hours: 9,  budget: 550 });
+  push({ siteId: `${site.code}-SDT-BH(1)`, bundle: bundleBH, date: day2, startTime: s.day23_bh1.time, hours: s.day23_bh1.hours, budget: s.day23_bh1.budget });
+  push({ siteId: `${site.code}-SDT-BH(2)`, bundle: bundleBH, date: day2, startTime: s.day23_bh2.time, hours: s.day23_bh2.hours, budget: s.day23_bh2.budget });
+  push({ siteId: `${site.code}-SDT-AH(1)`, bundle: bundleAH, date: day2, startTime: s.day23_ah1.time, hours: s.day23_ah1.hours, budget: s.day23_ah1.budget });
+  push({ siteId: `${site.code}-SDT-AH(2)`, bundle: bundleAH, date: day2, startTime: s.day23_ah2.time, hours: s.day23_ah2.hours, budget: s.day23_ah2.budget });
 
   // Day 3 ─ 2 BH + 2 AH WOs
-  push({ siteId: `${site.code}-SDT-BH(1)`, bundle: bundleBH, date: day3, startTime: "11:00am", hours: 8,  budget: 450 });
-  push({ siteId: `${site.code}-SDT-BH(2)`, bundle: bundleBH, date: day3, startTime: "11:00am", hours: 8,  budget: 450 });
-  push({ siteId: `${site.code}-SDT-AH(1)`, bundle: bundleAH, date: day3, startTime: "4:00pm",  hours: 10, budget: 600 });
-  push({ siteId: `${site.code}-SDT-AH(2)`, bundle: bundleAH, date: day3, startTime: "5:00pm",  hours: 9,  budget: 550 });
+  push({ siteId: `${site.code}-SDT-BH(1)`, bundle: bundleBH, date: day3, startTime: s.day23_bh1.time, hours: s.day23_bh1.hours, budget: s.day23_bh1.budget });
+  push({ siteId: `${site.code}-SDT-BH(2)`, bundle: bundleBH, date: day3, startTime: s.day23_bh2.time, hours: s.day23_bh2.hours, budget: s.day23_bh2.budget });
+  push({ siteId: `${site.code}-SDT-AH(1)`, bundle: bundleAH, date: day3, startTime: s.day23_ah1.time, hours: s.day23_ah1.hours, budget: s.day23_ah1.budget });
+  push({ siteId: `${site.code}-SDT-AH(2)`, bundle: bundleAH, date: day3, startTime: s.day23_ah2.time, hours: s.day23_ah2.hours, budget: s.day23_ah2.budget });
 
   rows.push([]); // blank separator row between sites
   return rows;
 }
 
 // Build rows using live woConfig values
-function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
+function buildRows(site, projectId, displayName, woType, cfg, allTypes, sdtCfg) {
   // Delegate to custom builders where needed
   if (woType === "SDT" || (allTypes || {})[woType]?.customBuild === "SDT") {
-    return buildSDTRows(site, projectId, displayName, cfg);
+    return buildSDTRows(site, projectId, displayName, cfg, sdtCfg);
   }
   const locPrefix = displayName.trim() || projectId;
   const meta = (allTypes || {})[woType] || WO_TYPES[woType] || { siteIdSuffix: woType, numTechs: 1, numDays: 1, useBundle: false };
@@ -397,6 +406,7 @@ export default function App() {
   const [brkConfig, setBrkConfig] = useState(() => _s?.brkConfig ?? { ...WO_DEFAULTS["BRK"] });
   const [includeBRK, setIncludeBRK] = useState(() => _s?.includeBRK ?? false);
   const [wrkConfig, setWrkConfig] = useState(() => _s?.wrkConfig ?? { ...WO_DEFAULTS["WRK"] });
+  const [sdtConfig, setSdtConfig] = useState(() => _s?.sdtConfig ?? { ...SDT_DEFAULTS });
   const [includeWRK, setIncludeWRK] = useState(() => _s?.includeWRK ?? false);
   const [importMode, setImportMode] = useState(false);
   const fileInputRef = useRef(null);
@@ -1432,7 +1442,7 @@ export default function App() {
       // Main WO CSV
       const rows = [];
       for (const site of sites) {
-        rows.push(...buildRows(site, projectId, displayName, woType, woConfig, ALL_WO_TYPES));
+        rows.push(...buildRows(site, projectId, displayName, woType, woConfig, ALL_WO_TYPES, sdtConfig));
       }
       if (rows.length && rows[rows.length-1].length === 0) rows.pop();
       const mainFilename = `FieldNation_${woType}_${safeProject}_${datePart}_${timePart}.csv`;
@@ -1516,7 +1526,7 @@ export default function App() {
   }, [sites, projectId, displayName, woType, woConfig, includeDEL, delConfig, includeBRK, brkConfig, includeWRK, wrkConfig]);
 
 
-  const totalRows = sites.filter(rowComplete).reduce((sum, site) => sum + buildRows(site, projectId, displayName, woType, woConfig, ALL_WO_TYPES).filter(r => r.length > 0).length, 0);
+  const totalRows = sites.filter(rowComplete).reduce((sum, site) => sum + buildRows(site, projectId, displayName, woType, woConfig, ALL_WO_TYPES, sdtConfig).filter(r => r.length > 0).length, 0);
   const delRows = includeDEL ? sites.filter(rowComplete).length : 0;
   const brkRows = includeBRK ? sites.filter(rowComplete).length : 0;
   const wrkRows = includeWRK ? sites.filter(rowComplete).length : 0;
@@ -1636,9 +1646,85 @@ export default function App() {
 
         {/* Step 0: Advanced Mode */}
         {step === 0 && !guidedMode && (
+          <>
           <Step0Advanced
             T={T} woType={woType} setWoType={setWoType} setWoConfig={setWoConfig} WO_DEFAULTS={WO_DEFAULTS} ALL_WO_TYPES={ALL_WO_TYPES} WO_TYPES={WO_TYPES} woConfig={woConfig} projectId={projectId} setProjectId={setProjectId} displayName={displayName} setDisplayName={setDisplayName} projectIdHistory={projectIdHistory} showPidDropdown={showPidDropdown} setShowPidDropdown={setShowPidDropdown} displayNameHistory={displayNameHistory} showDnDropdown={showDnDropdown} setShowDnDropdown={setShowDnDropdown} woTemplates={woTemplates} setShowTemplatePanel={setShowTemplatePanel} adminUnlocked={adminUnlocked} templateIdHistory={templateIdHistory} showTidDropdown={showTidDropdown} setShowTidDropdown={setShowTidDropdown} FN_TEMPLATE_BANK={FN_TEMPLATE_BANK} saveTemplateId={saveTemplateId} includeDEL={includeDEL} setIncludeDEL={setIncludeDEL} delConfig={delConfig} setDelConfig={setDelConfig} showDelTidDropdown={showDelTidDropdown} setShowDelTidDropdown={setShowDelTidDropdown} delTidLabelInput={delTidLabelInput} setDelTidLabelInput={setDelTidLabelInput} includeBRK={includeBRK} setIncludeBRK={setIncludeBRK} brkConfig={brkConfig} setBrkConfig={setBrkConfig} showBrkTidDropdown={showBrkTidDropdown} setShowBrkTidDropdown={setShowBrkTidDropdown} brkTidLabelInput={brkTidLabelInput} setBrkTidLabelInput={setBrkTidLabelInput} includeWRK={includeWRK} setIncludeWRK={setIncludeWRK} wrkConfig={wrkConfig} setWrkConfig={setWrkConfig} showWrkTidDropdown={showWrkTidDropdown} setShowWrkTidDropdown={setShowWrkTidDropdown} wrkTidLabelInput={wrkTidLabelInput} setWrkTidLabelInput={setWrkTidLabelInput} setGuidedMode={setGuidedMode} guidedMode={guidedMode} deletedBuiltins={deletedBuiltins} setDeleteConfirm={setDeleteConfirm} setDeletePw={setDeletePw} setDeletePwError={setDeletePwError} setEditingCustomKey={setEditingCustomKey} setCustomForm={setCustomForm} setShowCustomModal={setShowCustomModal} setShowRecoverModal={setShowRecoverModal} isPastDate={isPastDate} overriddenBuiltins={overriddenBuiltins}
           />
+
+          {/* SDT per-WO config panel — only shown when SDT is selected */}
+          {woType === "SDT" && (() => {
+            const SDT_ROWS = [
+              { key: "day1_ah1",  label: "Day 1 — AH(1)",      siteId: "xxxx-SDT-AH(1)", bundle: "AH" },
+              { key: "day23_bh1", label: "Day 2+3 — BH(1)",    siteId: "xxxx-SDT-BH(1)", bundle: "BH" },
+              { key: "day23_bh2", label: "Day 2+3 — BH(2)",    siteId: "xxxx-SDT-BH(2)", bundle: "BH" },
+              { key: "day23_ah1", label: "Day 2+3 — AH(1)",    siteId: "xxxx-SDT-AH(1)", bundle: "AH" },
+              { key: "day23_ah2", label: "Day 2+3 — AH(2)",    siteId: "xxxx-SDT-AH(2)", bundle: "AH" },
+            ];
+            const upd = (key, field, val) => setSdtConfig(prev => ({ ...prev, [key]: { ...prev[key], [field]: val } }));
+            return (
+              <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.accent}40`, marginTop: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, color: T.accent, textTransform: "uppercase", letterSpacing: 2 }}>SDT Work Order Schedule</div>
+                  <button onClick={() => setSdtConfig({ ...SDT_DEFAULTS })} style={{ fontSize: 10, color: T.textFaint, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontFamily: "inherit" }}>↩ Reset to defaults</button>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 8, padding: "4px 8px" }}>
+                  <div style={{ fontSize: 9, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.5 }}>Work Order</div>
+                  <div style={{ fontSize: 9, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.5, textAlign: "center" }}>Start · Hours</div>
+                  <div style={{ fontSize: 9, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.5, textAlign: "right" }}>Budget</div>
+                </div>
+                {SDT_ROWS.map(({ key, label, siteId, bundle }) => {
+                  const row = sdtConfig[key] || SDT_DEFAULTS[key];
+                  return (
+                    <div key={key} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, alignItems: "center", padding: "8px", background: T.surface2, borderRadius: 8, marginBottom: 6, borderLeft: `3px solid ${bundle === "AH" ? "#f59e0b" : "#3b82f6"}` }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: T.text, fontWeight: 600 }}>{label}</div>
+                        <div style={{ fontSize: 9, color: T.textFaint, marginTop: 1 }}>{siteId} · <span style={{ color: bundle === "AH" ? "#f59e0b" : "#3b82f6" }}>{bundle} bundle</span></div>
+                      </div>
+                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        <input
+                          value={row.time}
+                          onChange={e => upd(key, "time", e.target.value)}
+                          placeholder="2:00pm"
+                          style={{ ...T.inp, flex: 1, fontSize: 11, padding: "4px 6px", minWidth: 0 }}
+                          onFocus={e => e.target.style.borderColor = T.accent}
+                          onBlur={e => e.target.style.borderColor = T.border2}
+                        />
+                        <input
+                          value={row.hours}
+                          onChange={e => upd(key, "hours", e.target.value)}
+                          placeholder="10"
+                          type="number"
+                          min="1"
+                          style={{ ...T.inp, width: 48, fontSize: 11, padding: "4px 6px" }}
+                          onFocus={e => e.target.style.borderColor = T.accent}
+                          onBlur={e => e.target.style.borderColor = T.border2}
+                        />
+                        <span style={{ fontSize: 10, color: T.textFaint, whiteSpace: "nowrap" }}>hrs</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
+                        <span style={{ fontSize: 11, color: T.textFaint }}>$</span>
+                        <input
+                          value={row.budget}
+                          onChange={e => upd(key, "budget", e.target.value)}
+                          placeholder="650"
+                          type="number"
+                          min="0"
+                          style={{ ...T.inp, width: 72, fontSize: 11, padding: "4px 6px" }}
+                          onFocus={e => e.target.style.borderColor = T.accent}
+                          onBlur={e => e.target.style.borderColor = T.border2}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{ marginTop: 10, padding: "8px 12px", background: T.surface2, borderRadius: 7, fontSize: 11, color: T.textFaint, display: "flex", justifyContent: "space-between" }}>
+                  <span>9 WOs per site · Template <span style={{ color: T.textMid }}>104516</span></span>
+                  <span>AH bundle <span style={{ color: "#f59e0b" }}>■</span> &nbsp; BH bundle <span style={{ color: "#3b82f6" }}>■</span></span>
+                </div>
+              </div>
+            );
+          })()}
+          </>
         )}
 
         {/* STEP 1: Add Sites */}
@@ -1816,6 +1902,8 @@ export default function App() {
                                     type={col.type || "text"}
                                     value={site[col.key]}
                                     placeholder={col.key === 'numTechs' ? (woConfig.numTechs || col.ph) : col.key === 'numDays' ? (woConfig.numDays || col.ph) : col.key === 'date' ? (woConfig.defaultDate || col.ph) : col.key === 'budgetTech' ? (woConfig.budgetTech || col.ph) : col.key === 'payRate' ? (woConfig.payRate || col.ph) : col.ph}
+                                    onChange={e => updateSite(rowIdx, col.key, e.target.value)}
+                                    onFocus={() => setActiveCell({ row: rowIdx, col: colIdx })}
                                     style={{ width: "100%", background: col.key === 'date' && isPastDate(site[col.key] || (col.key === 'date' ? woConfig.defaultDate : '')) ? 'rgba(239,68,68,0.15)' : "transparent", border: "none", borderColor: col.key === 'date' && isPastDate(site[col.key] || (col.key === 'date' ? woConfig.defaultDate : '')) ? '#ef4444' : undefined, padding: "6px 8px", color: T.text, fontSize: 12, fontFamily: "inherit", outline: cellActive ? "2px solid #e97316" : "none", outlineOffset: "-1px", borderRadius: 3 }}
                                   />
                                 </td>
