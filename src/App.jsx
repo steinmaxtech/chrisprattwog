@@ -67,10 +67,13 @@ async function decompressString(b64) {
 // WO type metadata — structure only, no hardcoded values
 // SDT slots: array-based so user can add/remove. numTechs generates N sequential WOs (BH(1), BH(2)...)
 const SDT_DEFAULTS = [
-  { id: "s1", type: "AH", day: 1,  time: "2:00pm",  hours: 10, budget: 650, numTechs: 1 },
-  { id: "s2", type: "BH", day: 23, time: "11:00am", hours: 8,  budget: 450, numTechs: 2 },
-  { id: "s3", type: "AH", day: 23, time: "4:00pm",  hours: 10, budget: 600, numTechs: 1 },
-  { id: "s4", type: "AH", day: 23, time: "5:00pm",  hours: 9,  budget: 550, numTechs: 1 },
+  { id: "s1", type: "AH", day: 1, time: "2:00pm",  hours: 10, budget: 650, numTechs: 1 },
+  { id: "s2", type: "BH", day: 2, time: "11:00am", hours: 8,  budget: 450, numTechs: 2 },
+  { id: "s3", type: "AH", day: 2, time: "4:00pm",  hours: 10, budget: 600, numTechs: 1 },
+  { id: "s4", type: "AH", day: 2, time: "5:00pm",  hours: 9,  budget: 550, numTechs: 1 },
+  { id: "s5", type: "BH", day: 3, time: "11:00am", hours: 8,  budget: 450, numTechs: 2 },
+  { id: "s6", type: "AH", day: 3, time: "4:00pm",  hours: 10, budget: 600, numTechs: 1 },
+  { id: "s7", type: "AH", day: 3, time: "5:00pm",  hours: 9,  budget: 550, numTechs: 1 },
 ];
 
 const WO_TYPES = {
@@ -132,9 +135,9 @@ function buildSDTRows(site, projectId, displayName, cfg, sdtCfg) {
     }
   };
 
-  processDay(slots.filter(s => s.day === 1),  day1);
-  processDay(slots.filter(s => s.day === 23), day2);
-  processDay(slots.filter(s => s.day === 23), day3);
+  processDay(slots.filter(s => s.day === 1), day1);
+  processDay(slots.filter(s => s.day === 2), day2);
+  processDay(slots.filter(s => s.day === 3), day3);
 
   rows.push([]);
   return rows;
@@ -404,7 +407,7 @@ export default function App() {
   const [brkConfig, setBrkConfig] = useState(() => _s?.brkConfig ?? { ...WO_DEFAULTS["BRK"] });
   const [includeBRK, setIncludeBRK] = useState(() => _s?.includeBRK ?? false);
   const [wrkConfig, setWrkConfig] = useState(() => _s?.wrkConfig ?? { ...WO_DEFAULTS["WRK"] });
-  const [sdtConfig, setSdtConfig] = useState(() => _s?.sdtConfig ?? { ...SDT_DEFAULTS });
+  const [sdtConfig, setSdtConfig] = useState(() => { const s = _s?.sdtConfig; return Array.isArray(s) && s.length ? s : [...SDT_DEFAULTS]; });
   const [includeWRK, setIncludeWRK] = useState(() => _s?.includeWRK ?? false);
   const [importMode, setImportMode] = useState(false);
   const fileInputRef = useRef(null);
@@ -1653,97 +1656,98 @@ export default function App() {
 
           {/* SDT per-WO config panel — only shown when SDT is selected */}
           {woType === "SDT" && (() => {
-            const slots = Array.isArray(sdtConfig) ? sdtConfig : SDT_DEFAULTS;
-            let nextId = slots.reduce((m, s) => Math.max(m, parseInt(s.id?.replace("s","") || 0)), 0) + 1;
-            const updSlot = (id, field, val) => setSdtConfig(prev => prev.map(s => s.id === id ? { ...s, [field]: val } : s));
-            const removeSlot = (id) => setSdtConfig(prev => prev.length > 1 ? prev.filter(s => s.id !== id) : prev);
+            const slots = Array.isArray(sdtConfig) && sdtConfig.length ? sdtConfig : [...SDT_DEFAULTS];
+
+            const updSlot = (id, field, val) => setSdtConfig(prev =>
+              (Array.isArray(prev) ? prev : [...SDT_DEFAULTS]).map(s => s.id === id ? { ...s, [field]: val } : s)
+            );
+            const removeSlot = (id) => setSdtConfig(prev => {
+              const arr = Array.isArray(prev) ? prev : [...SDT_DEFAULTS];
+              return arr.length > 1 ? arr.filter(s => s.id !== id) : arr;
+            });
             const addSlot = (type, day) => setSdtConfig(prev => {
-              const defaults = day === 1
-                ? { time: "2:00pm", hours: 10, budget: 650 }
-                : type === "BH" ? { time: "11:00am", hours: 8, budget: 450 } : { time: "4:00pm", hours: 10, budget: 600 };
-              const newSlot = { id: `s${nextId++}`, type, day, numTechs: 1, ...defaults };
-              // Insert after last slot of same day
-              const lastIdx = prev.reduce((m, s, i) => s.day === day ? i : m, -1);
-              const arr = [...prev];
-              arr.splice(lastIdx + 1, 0, newSlot);
-              return arr;
+              const arr = Array.isArray(prev) ? prev : [...SDT_DEFAULTS];
+              const newId = `s${Date.now()}`;
+              const defTime = type === "BH" ? "11:00am" : day === 1 ? "2:00pm" : "4:00pm";
+              const newSlot = { id: newId, type, day, time: defTime, hours: type === "BH" ? 8 : 10, budget: type === "BH" ? 450 : day === 1 ? 650 : 600, numTechs: 1 };
+              const lastIdx = arr.reduce((m, s, i) => s.day === day ? i : m, -1);
+              const next = [...arr];
+              next.splice(lastIdx >= 0 ? lastIdx + 1 : next.length, 0, newSlot);
+              return next;
             });
 
-            const totalWOs = slots.reduce((sum, s) => sum + (s.day === 23 ? 2 : 1) * (Number(s.numTechs) || 1), 0);
+            const totalWOs = slots.reduce((sum, s) => sum + (Number(s.numTechs) || 1), 0);
 
-            const renderSection = (day, label) => {
+            const renderDay = (day, label) => {
               const daySlots = slots.filter(s => s.day === day);
-              // Compute display labels with sequential type counters
               const typeCounter = {};
               const labeled = daySlots.map(slot => {
                 const n = Number(slot.numTechs) || 1;
                 const start = (typeCounter[slot.type] || 0) + 1;
-                typeCounter[slot.type] = (typeCounter[slot.type] || 0) + n;
-                const numLabel = n === 1 ? `(${start})` : `(${start}–${start + n - 1})`;
-                return { slot, numLabel };
+                typeCounter[slot.type] = start + n - 1;
+                return { slot, numLabel: n === 1 ? `(${start})` : `(${start}–${start + n - 1})` };
               });
 
               return (
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <div style={{ fontSize: 9, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.5 }}>{label}</div>
+                <div key={day} style={{ marginBottom: 10, background: T.surface2, borderRadius: 9, padding: "10px 10px 8px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
+                    <div style={{ fontSize: 10, color: T.textMid, fontFamily: "'Bebas Neue',sans-serif", letterSpacing: 2 }}>{label}</div>
                     <div style={{ display: "flex", gap: 5 }}>
-                      <button onClick={() => addSlot("BH", day)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 5, border: `1px solid #3b82f6`, background: "transparent", color: "#3b82f6", cursor: "pointer", fontFamily: "inherit" }}>+ BH</button>
-                      <button onClick={() => addSlot("AH", day)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 5, border: `1px solid #f59e0b`, background: "transparent", color: "#f59e0b", cursor: "pointer", fontFamily: "inherit" }}>+ AH</button>
+                      <button onClick={() => addSlot("BH", day)} style={{ fontSize: 10, padding: "2px 9px", borderRadius: 5, border: `1px solid #3b82f6`, background: "transparent", color: "#3b82f6", cursor: "pointer", fontFamily: "inherit" }}>+ BH</button>
+                      <button onClick={() => addSlot("AH", day)} style={{ fontSize: 10, padding: "2px 9px", borderRadius: 5, border: `1px solid #f59e0b`, background: "transparent", color: "#f59e0b", cursor: "pointer", fontFamily: "inherit" }}>+ AH</button>
                     </div>
                   </div>
+                  {labeled.length === 0 && <div style={{ fontSize: 11, color: T.textFaint, padding: "6px 4px", fontStyle: "italic" }}>No WOs — use + buttons to add</div>}
                   {labeled.map(({ slot, numLabel }) => (
-                    <div key={slot.id} style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr auto auto auto", gap: 5, alignItems: "center", padding: "7px 8px", background: T.surface2, borderRadius: 7, marginBottom: 5, borderLeft: `3px solid ${slot.type === "AH" ? "#f59e0b" : "#3b82f6"}` }}>
-                      {/* Type badge + WO label */}
-                      <div style={{ minWidth: 90 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: slot.type === "AH" ? "#f59e0b" : "#3b82f6" }}>{slot.type}{numLabel}</div>
-                        <div style={{ fontSize: 9, color: T.textFaint }}>xxxx-SDT-{slot.type}</div>
+                    <div key={slot.id} style={{ display: "flex", gap: 6, alignItems: "center", padding: "6px 7px", background: T.surface, borderRadius: 7, marginBottom: 5, borderLeft: `3px solid ${slot.type === "AH" ? "#f59e0b" : "#3b82f6"}` }}>
+                      {/* Badge */}
+                      <div style={{ minWidth: 62, textAlign: "center", background: slot.type === "AH" ? "rgba(245,158,11,0.12)" : "rgba(59,130,246,0.12)", borderRadius: 5, padding: "3px 5px" }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: slot.type === "AH" ? "#f59e0b" : "#3b82f6", fontFamily: "'Bebas Neue',sans-serif", letterSpacing: 1.5 }}>{slot.type}{numLabel}</div>
                       </div>
                       {/* Time */}
                       <input value={slot.time} onChange={e => updSlot(slot.id, "time", e.target.value)} placeholder="11:00am"
-                        style={{ ...T.inp, fontSize: 11, padding: "4px 6px" }}
+                        style={{ ...T.inp, flex: 1, fontSize: 11, padding: "4px 6px", minWidth: 0 }}
                         onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
                       {/* Hours */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                        <input value={slot.hours} onChange={e => updSlot(slot.id, "hours", e.target.value)} type="number" min="1" placeholder="8"
-                          style={{ ...T.inp, width: 46, fontSize: 11, padding: "4px 5px" }}
-                          onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
-                        <span style={{ fontSize: 9, color: T.textFaint }}>hrs</span>
-                        <span style={{ fontSize: 9, color: T.textFaint, marginLeft: 2 }}>$</span>
-                        <input value={slot.budget} onChange={e => updSlot(slot.id, "budget", e.target.value)} type="number" min="0" placeholder="450"
-                          style={{ ...T.inp, width: 56, fontSize: 11, padding: "4px 5px" }}
-                          onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
-                      </div>
-                      {/* numTechs stepper */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                      <input value={slot.hours} onChange={e => updSlot(slot.id, "hours", e.target.value)} type="number" min="1" placeholder="8"
+                        style={{ ...T.inp, width: 44, fontSize: 11, padding: "4px 5px" }}
+                        onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+                      <span style={{ fontSize: 9, color: T.textFaint }}>hrs</span>
+                      {/* Budget */}
+                      <span style={{ fontSize: 10, color: T.textFaint }}>$</span>
+                      <input value={slot.budget} onChange={e => updSlot(slot.id, "budget", e.target.value)} type="number" min="0" placeholder="450"
+                        style={{ ...T.inp, width: 56, fontSize: 11, padding: "4px 5px" }}
+                        onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+                      {/* Techs stepper */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 2, background: T.surface2, borderRadius: 6, padding: "2px 4px" }}>
                         <button onClick={() => updSlot(slot.id, "numTechs", Math.max(1, (Number(slot.numTechs) || 1) - 1))}
-                          style={{ width: 22, height: 22, borderRadius: 4, border: `1px solid ${T.border2}`, background: T.surface, color: T.textMid, cursor: "pointer", fontSize: 14, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-                        <div style={{ minWidth: 32, textAlign: "center" }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{slot.numTechs || 1}</div>
-                          <div style={{ fontSize: 8, color: T.textFaint, marginTop: -1 }}>techs</div>
+                          style={{ width: 20, height: 20, borderRadius: 3, border: `1px solid ${T.border2}`, background: T.surface, color: T.textMid, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>−</button>
+                        <div style={{ minWidth: 28, textAlign: "center" }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{slot.numTechs || 1}</div>
+                          <div style={{ fontSize: 8, color: T.textFaint, marginTop: -2, lineHeight: 1 }}>tech{(slot.numTechs || 1) > 1 ? "s" : ""}</div>
                         </div>
                         <button onClick={() => updSlot(slot.id, "numTechs", (Number(slot.numTechs) || 1) + 1)}
-                          style={{ width: 22, height: 22, borderRadius: 4, border: `1px solid ${T.border2}`, background: T.surface, color: T.textMid, cursor: "pointer", fontSize: 14, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                          style={{ width: 20, height: 20, borderRadius: 3, border: `1px solid ${T.border2}`, background: T.surface, color: T.textMid, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>+</button>
                       </div>
                       {/* Remove */}
-                      <button onClick={() => removeSlot(slot.id)} disabled={slots.length <= 1}
-                        style={{ width: 22, height: 22, borderRadius: 4, border: `1px solid ${slots.length <= 1 ? T.border : "#ef4444"}`, background: "transparent", color: slots.length <= 1 ? T.border2 : "#ef4444", cursor: slots.length <= 1 ? "default" : "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                      <button onClick={() => removeSlot(slot.id)} title="Remove"
+                        style={{ width: 22, height: 22, borderRadius: 4, border: `1px solid #ef444460`, background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
                     </div>
                   ))}
-                  {daySlots.length === 0 && <div style={{ fontSize: 11, color: T.textFaint, padding: "8px", fontStyle: "italic" }}>No WOs — use + buttons above to add</div>}
                 </div>
               );
             };
 
             return (
-              <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.accent}40`, marginTop: 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ background: T.surface, borderRadius: 12, padding: "1.25rem", border: `1px solid ${T.accent}40` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                   <div style={{ fontSize: 10, color: T.accent, textTransform: "uppercase", letterSpacing: 2 }}>SDT Work Order Schedule</div>
                   <button onClick={() => setSdtConfig([...SDT_DEFAULTS])} style={{ fontSize: 10, color: T.textFaint, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontFamily: "inherit" }}>↩ Reset</button>
                 </div>
-                {renderSection(1, "Day 1")}
-                {renderSection(23, "Day 2 + Day 3")}
-                <div style={{ marginTop: 8, padding: "7px 12px", background: T.surface2, borderRadius: 7, fontSize: 11, color: T.textFaint, display: "flex", justifyContent: "space-between" }}>
+                {renderDay(1, "Day 1")}
+                {renderDay(2, "Day 2")}
+                {renderDay(3, "Day 3")}
+                <div style={{ padding: "7px 10px", background: T.surface2, borderRadius: 7, fontSize: 11, color: T.textFaint, display: "flex", justifyContent: "space-between", marginTop: 4 }}>
                   <span><span style={{ color: T.textMid, fontWeight: 600 }}>{totalWOs}</span> WOs per site · Template <span style={{ color: T.textMid }}>104516</span></span>
                   <span>AH <span style={{ color: "#f59e0b" }}>■</span> &nbsp; BH <span style={{ color: "#3b82f6" }}>■</span></span>
                 </div>
