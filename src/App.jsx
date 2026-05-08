@@ -66,14 +66,14 @@ async function decompressString(b64) {
 
 // WO type metadata — structure only, no hardcoded values
 const WO_TYPES = {
-  LVL:  { label: "LVL — Low Voltage Lead",          siteIdSuffix: "LVL(1)", numTechs: 1, numDays: 3, useBundle: true  },
-  LVT:  { label: "LVT — Low Voltage Tech",           siteIdSuffix: "LVT",    numTechs: 3, numDays: 3, useBundle: true  },
-  DEL:  { label: "DEL — Delivery/Install",           siteIdSuffix: "DEL",    numTechs: 1, numDays: 1, useBundle: false },
-  BRK:  { label: "BRK — Backerboard Creation",          siteIdSuffix: "BRK",    numTechs: 1, numDays: 1, useBundle: false },
+  LVL:  { label: "LVL — Low Voltage Lead",                siteIdSuffix: "LVL(1)", numTechs: 1, numDays: 3, useBundle: true  },
+  LVT:  { label: "LVT — Low Voltage Tech",                siteIdSuffix: "LVT",    numTechs: 3, numDays: 3, useBundle: true  },
+  DEL:  { label: "DEL — Delivery/Install",                siteIdSuffix: "DEL",    numTechs: 1, numDays: 1, useBundle: false },
+  BRK:  { label: "BRK — Backerboard Creation",            siteIdSuffix: "BRK",    numTechs: 1, numDays: 1, useBundle: false },
+  SDT:  { label: "SDT — Security Device Technician",      siteIdSuffix: "SDT",    numTechs: 1, numDays: 3, useBundle: true, customBuild: "SDT" },
   INT:  { label: "INT — Installation Technician",        siteIdSuffix: "INT",    numTechs: 1, numDays: 1, useBundle: true  },
   INL:  { label: "INL — Installation Lead",              siteIdSuffix: "INL",    numTechs: 1, numDays: 1, useBundle: true  },
   WRK:  { label: "WRK — Walk In Ready Kit",            siteIdSuffix: "WRK",    numTechs: 1, numDays: 1, useBundle: false },
-  SDT:  { label: "SDT — Security Device Technician",    siteIdSuffix: "SDT",    numTechs: 1, numDays: 3, useBundle: true, specialPattern: "SDT" },
 };
 
 // Default configs per type — blank, user fills in each run
@@ -83,62 +83,71 @@ const WO_DEFAULTS = {
   LVT:  { ...BLANK_CFG, templateId: "103094" },
   DEL:  { ...BLANK_CFG, templateId: "102221" },
   BRK:  { ...BLANK_CFG, templateId: "102222" },
+  SDT:  { ...BLANK_CFG, templateId: "104516", techType: "Tech", country: "US" },
   INT:  { ...BLANK_CFG, templateId: "103096" },
   INL:  { ...BLANK_CFG, templateId: "103097" },
   WRK:  { ...BLANK_CFG, templateId: "" },
-  SDT:  { ...BLANK_CFG, templateId: "104516", techType: "Security Device Technician", numTechs: "1", numDays: "3", country: "US", payType: "Fixed" },
 };
 
+// Build rows using live woConfig values
 function buildSDTRows(site, projectId, displayName, cfg) {
+  // Fixed SDT structure:
+  //   Day 1: AH(1)  [2pm, 10hrs, $650]
+  //   Day 2: BH(1) + BH(2) [11am, 8hrs, $450 each]  +  AH(1) [4pm, 10hrs, $600]  +  AH(2) [5pm, 9hrs, $550]
+  //   Day 3: same pattern as Day 2
+  // BH WOs bundled together; AH WOs bundled together.
   const locPrefix = displayName.trim() || projectId;
-  const templateId = Number(cfg.templateId || 104516);
+  const tId = Number(cfg.templateId) || 104516;
   const country = cfg.country || "US";
-  const techType = cfg.techType || "Security Device Technician";
+  const techType = cfg.techType || "Tech";
   const payType = cfg.payType || "Fixed";
-  const schedule = [
-    { dayOffset: 0, period: "AH", slot: 1, startTime: "2:00pm", hours: 10, amount: 650 },
-    { dayOffset: 1, period: "BH", slot: 1, startTime: "11:00am", hours: 8, amount: 450 },
-    { dayOffset: 1, period: "BH", slot: 2, startTime: "11:00am", hours: 8, amount: 450 },
-    { dayOffset: 1, period: "AH", slot: 1, startTime: "4:00pm", hours: 10, amount: 600 },
-    { dayOffset: 1, period: "AH", slot: 2, startTime: "5:00pm", hours: 9, amount: 550 },
-    { dayOffset: 2, period: "BH", slot: 1, startTime: "11:00am", hours: 8, amount: 450 },
-    { dayOffset: 2, period: "BH", slot: 2, startTime: "11:00am", hours: 8, amount: 450 },
-    { dayOffset: 2, period: "AH", slot: 1, startTime: "4:00pm", hours: 10, amount: 600 },
-    { dayOffset: 2, period: "AH", slot: 2, startTime: "5:00pm", hours: 9, amount: 550 },
-  ];
+  const rows = [];
 
-  return schedule.map((item) => {
-    const date = addDays(site.date, item.dayOffset);
-    const siteId = `${site.code}-SDT-${item.period}(${item.slot})`;
-    const bundle = `${site.code}-SDT-${item.period}`;
+  const day1 = site.date;
+  const day2 = addDays(site.date, 1);
+  const day3 = addDays(site.date, 2);
+
+  const bundleAH = `${site.code}-SDT-AH`;
+  const bundleBH = `${site.code}-SDT-BH`;
+
+  const push = ({ siteId, bundle, date, startTime, hours, budget }) => {
     const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-    return makeRow({
-      templateId,
-      projectId,
-      siteId,
-      bundle,
-      site,
-      date,
-      startTime: item.startTime,
-      techType,
-      budgetTech: item.amount,
-      maxBudget: item.amount,
-      payRate: item.amount,
-      approxHours: item.hours,
-      estDuration: item.hours,
-      country,
-      locName,
-      payType,
-      routeTo: ""
-    });
-  });
+    rows.push(makeRow({
+      templateId: tId, projectId, siteId, bundle,
+      site, date, startTime: normalizeTime(startTime),
+      techType, budgetTech: budget, maxBudget: budget, payRate: budget,
+      approxHours: hours, estDuration: hours,
+      country, locName, payType, routeTo: "",
+    }));
+  };
+
+  // Day 1 ─ 1 AH WO
+  push({ siteId: `${site.code}-SDT-AH(1)`, bundle: bundleAH, date: day1, startTime: "2:00pm",  hours: 10, budget: 650 });
+
+  // Day 2 ─ 2 BH + 2 AH WOs
+  push({ siteId: `${site.code}-SDT-BH(1)`, bundle: bundleBH, date: day2, startTime: "11:00am", hours: 8,  budget: 450 });
+  push({ siteId: `${site.code}-SDT-BH(2)`, bundle: bundleBH, date: day2, startTime: "11:00am", hours: 8,  budget: 450 });
+  push({ siteId: `${site.code}-SDT-AH(1)`, bundle: bundleAH, date: day2, startTime: "4:00pm",  hours: 10, budget: 600 });
+  push({ siteId: `${site.code}-SDT-AH(2)`, bundle: bundleAH, date: day2, startTime: "5:00pm",  hours: 9,  budget: 550 });
+
+  // Day 3 ─ 2 BH + 2 AH WOs
+  push({ siteId: `${site.code}-SDT-BH(1)`, bundle: bundleBH, date: day3, startTime: "11:00am", hours: 8,  budget: 450 });
+  push({ siteId: `${site.code}-SDT-BH(2)`, bundle: bundleBH, date: day3, startTime: "11:00am", hours: 8,  budget: 450 });
+  push({ siteId: `${site.code}-SDT-AH(1)`, bundle: bundleAH, date: day3, startTime: "4:00pm",  hours: 10, budget: 600 });
+  push({ siteId: `${site.code}-SDT-AH(2)`, bundle: bundleAH, date: day3, startTime: "5:00pm",  hours: 9,  budget: 550 });
+
+  rows.push([]); // blank separator row between sites
+  return rows;
 }
 
 // Build rows using live woConfig values
 function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
+  // Delegate to custom builders where needed
+  if (woType === "SDT" || (allTypes || {})[woType]?.customBuild === "SDT") {
+    return buildSDTRows(site, projectId, displayName, cfg);
+  }
   const locPrefix = displayName.trim() || projectId;
   const meta = (allTypes || {})[woType] || WO_TYPES[woType] || { siteIdSuffix: woType, numTechs: 1, numDays: 1, useBundle: false };
-  if (woType === "SDT" || meta.specialPattern === "SDT") return buildSDTRows(site, projectId, displayName, cfg);
   const rows = [];
   const tId = Number(cfg.templateId);
   const cfgBudget = Number(cfg.budgetTech);
@@ -1886,7 +1895,11 @@ export default function App() {
               <div style={{ fontSize: 12, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: T.textDim }}>Pattern</span>
-                  <span style={{ color: T.textMid }}>{woConfig.numTechs} tech{Number(woConfig.numTechs) > 1 ? "s" : ""} × {woConfig.numDays} day{Number(woConfig.numDays) > 1 ? "s" : ""} (default)</span>
+                  <span style={{ color: T.textMid }}>
+                    {woType === "SDT"
+                      ? "9 WOs/site · Day1: 1 AH · Day2-3: 2 BH + 2 AH"
+                      : `${woConfig.numTechs} tech${Number(woConfig.numTechs) > 1 ? "s" : ""} × ${woConfig.numDays} day${Number(woConfig.numDays) > 1 ? "s" : ""} (default)`}
+                  </span>
                 </div>
                 {(() => {
                   const overrides = sites.filter(rowComplete).filter(s =>
@@ -1924,15 +1937,6 @@ export default function App() {
                 <span style={{ color: T.textDim }}>Budget / Pay Rate</span>
                 <span style={{ color: T.textMid }}>${woConfig.budgetTech} / ${woConfig.payRate}</span>
               </div>
-              {woType === "SDT" && (
-                <div style={{ fontSize: 12, padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
-                  <div style={{ color: T.textDim, marginBottom: 4 }}>SDT Schedule</div>
-                  <div style={{ color: T.textMid, fontSize: 11, lineHeight: 1.7 }}>
-                    Day 1: 1 AH · Day 2: 2 BH + 2 AH · Day 3: 2 BH + 2 AH<br />
-                    BH bundles together by site. AH bundles together by site. Template #104516.
-                  </div>
-                </div>
-              )}
               {(() => {
                 const rateOverrides = sites.filter(s => rowComplete(s) && (s.budgetTech || s.payRate));
                 if (!rateOverrides.length) return null;
@@ -1976,15 +1980,15 @@ export default function App() {
                   <div key={realIdx} style={{ background: T.surface2, borderRadius: 6, padding: "8px 10px", borderLeft: `3px solid ${s.womId ? T.accent : s.verified === true ? "#22c55e" : T.border}` }}>
                     <div style={{ fontSize: 12, color: T.accent, fontWeight: 600 }}>{s.code}{s.branchName ? ` — ${s.branchName}` : ""}</div>
                     <div style={{ fontSize: 11, color: T.textDim, marginTop: 2, lineHeight: 1.5 }}>{s.address}{s.address2 ? `, ${s.address2}` : ""}<br />{s.city}, {s.state} {s.zip}</div>
-                    <div style={{ marginTop: 6 }}>
-                      <label style={{ display: "block", fontSize: 9, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 3 }}>Start Date</label>
+                    <div style={{ marginTop: 5 }}>
+                      <div style={{ fontSize: 9, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 2 }}>Start Date</div>
                       <input
                         type="date"
                         value={s.date || ""}
-                        onChange={e => updateSite(realIdx, "date", e.target.value)}
-                        style={{ width: "100%", background: isPastDate(s.date) ? "rgba(239,68,68,0.15)" : T.surface, border: `1px solid ${isPastDate(s.date) ? "#ef4444" : T.border2}`, borderRadius: 5, padding: "4px 8px", color: T.text, fontSize: 10, fontFamily: "inherit" }}
+                        onChange={e => setSites(prev => prev.map((x, xi) => xi === realIdx ? { ...x, date: e.target.value, dateOverridden: true } : x))}
+                        style={{ width: "100%", background: isPastDate(s.date) ? "rgba(239,68,68,0.12)" : T.surface, border: `1px solid ${isPastDate(s.date) ? "#ef4444" : s.dateOverridden ? T.accent : T.border2}`, borderRadius: 4, padding: "3px 6px", color: T.text, fontSize: 11, fontFamily: "inherit", boxSizing: "border-box" }}
                         onFocus={e => e.target.style.borderColor = T.accent}
-                        onBlur={e => e.target.style.borderColor = isPastDate(s.date) ? "#ef4444" : T.border2}
+                        onBlur={e => e.target.style.borderColor = isPastDate(s.date) ? "#ef4444" : s.dateOverridden ? T.accent : T.border2}
                       />
                     </div>
                     {(s.budgetTech || s.payRate) && (
