@@ -163,9 +163,15 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
         {adminUnlocked && Object.keys(deletedBuiltins||{}).length>0 && <button onClick={()=>setShowRecoverModal(true)} style={{ marginTop:6, width:"100%", background:"transparent", border:"1px dashed #22c55e", borderRadius:10, padding:"8px", color:"#22c55e", cursor:"pointer", fontSize:12, fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>↩ Recover Deleted ({Object.keys(deletedBuiltins||{}).length})</button>}
       </div>
 
-      {woType && (
-        <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
-          <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>Work Order Config</div>
+      {woType && (() => {
+        const isSdt = woType === "SDT";
+        const sdtGreyed = new Set(["startTime","numTechs","numDays","budgetTech","payRate","approxHours"]);
+        return (
+        <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}`, opacity: 1 }}>
+          <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>
+            Work Order Config
+            {isSdt && <span style={{ marginLeft: 8, color: "#f59e0b", fontSize: 9 }}>· dimmed fields controlled by SDT Schedule below</span>}
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <TidDropdown value={woConfig.templateId} onChange={v=>setWoConfig(p=>({...p,templateId:v}))} history={templateIdHistory[woType]} bank={FN_TEMPLATE_BANK} show={showTidDropdown} setShow={setShowTidDropdown} tidLabel="" setTidLabel={()=>{}} labelPh="Label" T={T} />
             {[
@@ -178,16 +184,28 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
               {key:"payRate",lbl:"Pay Rate $",ph:""},
               {key:"approxHours",lbl:"Est. Hours",ph:"3"},
               {key:"country",lbl:"Country",ph:"US"},
-            ].map(({key,lbl,ph,type}) => (
-              <FieldInput key={key} label={lbl} value={woConfig[key]} onChange={e=>setWoConfig(p=>({...p,[key]:e.target.value}))} ph={ph} type={type} T={T} />
-            ))}
-            <PayTypeToggle value={woConfig.payType} onChange={v=>setWoConfig(p=>({...p,payType:v}))} T={T} />
+            ].map(({key,lbl,ph,type}) => {
+              const dimmed = isSdt && sdtGreyed.has(key);
+              return (
+                <div key={key} style={{ opacity: dimmed ? 0.35 : 1, pointerEvents: dimmed ? "none" : "auto" }}>
+                  <label style={{ display:"block", fontSize:10, color:T.textDim, textTransform:"uppercase", letterSpacing:1.5, marginBottom:4 }}>{lbl}</label>
+                  <input type={type||"text"} placeholder={ph||""} value={woConfig[key]||""} onChange={e=>setWoConfig(p=>({...p,[key]:e.target.value}))} onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border2} style={T.inp} />
+                </div>
+              );
+            })}
+            <div style={{ opacity: isSdt ? 0.35 : 1, pointerEvents: isSdt ? "none" : "auto", gridColumn:"span 2" }}>
+              <PayTypeToggle value={woConfig.payType} onChange={v=>setWoConfig(p=>({...p,payType:v}))} T={T} />
+            </div>
           </div>
           <div style={{ marginTop:12, padding:"8px 12px", background:T.surface2, borderRadius:7, fontSize:11, color:T.textFaint }}>
-            Pattern: <span style={{color:T.textMid}}>{woConfig.numTechs} tech{Number(woConfig.numTechs)>1?"s":""} × {woConfig.numDays} day{Number(woConfig.numDays)>1?"s":""}</span> · Template: <span style={{color:T.textMid}}>{woConfig.templateId||"—"}</span>
+            {isSdt
+              ? <span>Template: <span style={{color:T.textMid}}>{woConfig.templateId||"—"}</span> · Start date set per site in table</span>
+              : <span>Pattern: <span style={{color:T.textMid}}>{woConfig.numTechs} tech{Number(woConfig.numTechs)>1?"s":""} × {woConfig.numDays} day{Number(woConfig.numDays)>1?"s":""}</span> · Template: <span style={{color:T.textMid}}>{woConfig.templateId||"—"}</span></span>
+            }
           </div>
         </div>
-      )}
+        );
+      })()}
 
       <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
         <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Companion Work Orders</div>

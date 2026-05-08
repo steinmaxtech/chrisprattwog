@@ -65,13 +65,13 @@ async function decompressString(b64) {
 }
 
 // WO type metadata — structure only, no hardcoded values
-const SDT_DEFAULTS = {
-  day1_ah1:  { time: "2:00pm",  hours: 10, budget: 650 },
-  day23_bh1: { time: "11:00am", hours: 8,  budget: 450 },
-  day23_bh2: { time: "11:00am", hours: 8,  budget: 450 },
-  day23_ah1: { time: "4:00pm",  hours: 10, budget: 600 },
-  day23_ah2: { time: "5:00pm",  hours: 9,  budget: 550 },
-};
+// SDT slots: array-based so user can add/remove. numTechs generates N sequential WOs (BH(1), BH(2)...)
+const SDT_DEFAULTS = [
+  { id: "s1", type: "AH", day: 1,  time: "2:00pm",  hours: 10, budget: 650, numTechs: 1 },
+  { id: "s2", type: "BH", day: 23, time: "11:00am", hours: 8,  budget: 450, numTechs: 2 },
+  { id: "s3", type: "AH", day: 23, time: "4:00pm",  hours: 10, budget: 600, numTechs: 1 },
+  { id: "s4", type: "AH", day: 23, time: "5:00pm",  hours: 9,  budget: 550, numTechs: 1 },
+];
 
 const WO_TYPES = {
   LVL:  { label: "LVL — Low Voltage Lead",                siteIdSuffix: "LVL(1)", numTechs: 1, numDays: 3, useBundle: true  },
@@ -99,12 +99,7 @@ const WO_DEFAULTS = {
 
 // Build rows using live woConfig values
 function buildSDTRows(site, projectId, displayName, cfg, sdtCfg) {
-  // Fixed SDT structure:
-  //   Day 1: AH(1)  [2pm, 10hrs, $650]
-  //   Day 2: BH(1) + BH(2) [11am, 8hrs, $450 each]  +  AH(1) [4pm, 10hrs, $600]  +  AH(2) [5pm, 9hrs, $550]
-  //   Day 3: same pattern as Day 2
-  // BH WOs bundled together; AH WOs bundled together.
-  const s = { ...SDT_DEFAULTS, ...(sdtCfg || {}) }; // merge defaults with overrides
+  const slots = Array.isArray(sdtCfg) && sdtCfg.length ? sdtCfg : SDT_DEFAULTS;
   const locPrefix = displayName.trim() || projectId;
   const tId = Number(cfg.templateId) || 104516;
   const country = cfg.country || "US";
@@ -112,40 +107,36 @@ function buildSDTRows(site, projectId, displayName, cfg, sdtCfg) {
   const payType = cfg.payType || "Fixed";
   const rows = [];
 
-  const day1 = site.date;
-  const day2 = addDays(site.date, 1);
-  const day3 = addDays(site.date, 2);
+  const day1   = site.date;
+  const day2   = addDays(site.date, 1);
+  const day3   = addDays(site.date, 2);
 
-  const bundleAH = `${site.code}-SDT-AH`;
-  const bundleBH = `${site.code}-SDT-BH`;
-
-  const push = ({ siteId, bundle, date, startTime, hours, budget }) => {
-    const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-    rows.push(makeRow({
-      templateId: tId, projectId, siteId, bundle,
-      site, date, startTime: normalizeTime(startTime),
-      techType, budgetTech: budget, maxBudget: budget, payRate: budget,
-      approxHours: hours, estDuration: hours,
-      country, locName, payType, routeTo: "",
-    }));
+  const processDay = (daySlots, date) => {
+    // Track per-type running counters so BH(1), BH(2)... are sequential
+    const counters = {};
+    for (const slot of daySlots) {
+      const n = Number(slot.numTechs) || 1;
+      for (let t = 0; t < n; t++) {
+        counters[slot.type] = (counters[slot.type] || 0) + 1;
+        const siteId  = `${site.code}-SDT-${slot.type}(${counters[slot.type]})`;
+        const bundle  = `${site.code}-SDT-${slot.type}`;
+        const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
+        rows.push(makeRow({
+          templateId: tId, projectId, siteId, bundle,
+          site, date, startTime: normalizeTime(slot.time),
+          techType, budgetTech: Number(slot.budget), maxBudget: Number(slot.budget),
+          payRate: Number(slot.budget), approxHours: Number(slot.hours), estDuration: Number(slot.hours),
+          country, locName, payType, routeTo: "",
+        }));
+      }
+    }
   };
 
-  // Day 1 ─ 1 AH WO
-  push({ siteId: `${site.code}-SDT-AH(1)`, bundle: bundleAH, date: day1, startTime: s.day1_ah1.time,  hours: s.day1_ah1.hours,  budget: s.day1_ah1.budget  });
+  processDay(slots.filter(s => s.day === 1),  day1);
+  processDay(slots.filter(s => s.day === 23), day2);
+  processDay(slots.filter(s => s.day === 23), day3);
 
-  // Day 2 ─ 2 BH + 2 AH WOs
-  push({ siteId: `${site.code}-SDT-BH(1)`, bundle: bundleBH, date: day2, startTime: s.day23_bh1.time, hours: s.day23_bh1.hours, budget: s.day23_bh1.budget });
-  push({ siteId: `${site.code}-SDT-BH(2)`, bundle: bundleBH, date: day2, startTime: s.day23_bh2.time, hours: s.day23_bh2.hours, budget: s.day23_bh2.budget });
-  push({ siteId: `${site.code}-SDT-AH(1)`, bundle: bundleAH, date: day2, startTime: s.day23_ah1.time, hours: s.day23_ah1.hours, budget: s.day23_ah1.budget });
-  push({ siteId: `${site.code}-SDT-AH(2)`, bundle: bundleAH, date: day2, startTime: s.day23_ah2.time, hours: s.day23_ah2.hours, budget: s.day23_ah2.budget });
-
-  // Day 3 ─ 2 BH + 2 AH WOs
-  push({ siteId: `${site.code}-SDT-BH(1)`, bundle: bundleBH, date: day3, startTime: s.day23_bh1.time, hours: s.day23_bh1.hours, budget: s.day23_bh1.budget });
-  push({ siteId: `${site.code}-SDT-BH(2)`, bundle: bundleBH, date: day3, startTime: s.day23_bh2.time, hours: s.day23_bh2.hours, budget: s.day23_bh2.budget });
-  push({ siteId: `${site.code}-SDT-AH(1)`, bundle: bundleAH, date: day3, startTime: s.day23_ah1.time, hours: s.day23_ah1.hours, budget: s.day23_ah1.budget });
-  push({ siteId: `${site.code}-SDT-AH(2)`, bundle: bundleAH, date: day3, startTime: s.day23_ah2.time, hours: s.day23_ah2.hours, budget: s.day23_ah2.budget });
-
-  rows.push([]); // blank separator row between sites
+  rows.push([]);
   return rows;
 }
 
@@ -395,6 +386,13 @@ export default function App() {
   const [woConfig, setWoConfig] = useState(() => _s?.woConfig ?? { ...WO_DEFAULTS["LVL"] });
   const [sites, setSites] = useState(() => _s?.sites ?? [EMPTY_SITE()]);
   const [generating, setGenerating] = useState(false);
+  const [exporterName, setExporterName] = useState(() => { try { return localStorage.getItem("cpwog_exporter") || ""; } catch { return ""; } });
+  const [showExporterModal, setShowExporterModal] = useState(false);
+  const [exporterInput, setExporterInput] = useState("");
+  const [addonExpanded, setAddonExpanded] = useState(false);
+  const [addonWoType, setAddonWoType] = useState("DEL");
+  const [addonConfig, setAddonConfig] = useState({ ...WO_DEFAULTS["DEL"] });
+  const [addonGenerating, setAddonGenerating] = useState(false);
   const [activeCell, setActiveCell] = useState({ row: 0, col: 0 });
   const [pasteText, setPasteText] = useState("");
   const [pasteMode, setPasteMode] = useState(true);
@@ -1424,12 +1422,14 @@ export default function App() {
   ];
 
   const downloadCSV = useCallback(async () => {
+    if (!exporterName.trim()) { setExporterInput(""); setShowExporterModal(true); return; }
     setGenerating(true);
     try {
       const now = new Date();
       const datePart = now.toISOString().split("T")[0];
       const timePart = now.toTimeString().slice(0, 8).replace(/:/g, "-");
       const safeProject = projectId.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const safeExporter = exporterName.trim().replace(/[^a-zA-Z0-9]/g, "_").slice(0, 20);
       const triggerDownload = (csvContent, filename) => {
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
@@ -1445,7 +1445,7 @@ export default function App() {
         rows.push(...buildRows(site, projectId, displayName, woType, woConfig, ALL_WO_TYPES, sdtConfig));
       }
       if (rows.length && rows[rows.length-1].length === 0) rows.pop();
-      const mainFilename = `FieldNation_${woType}_${safeProject}_${datePart}_${timePart}.csv`;
+      const mainFilename = `FieldNation_${woType}_${safeProject}_${datePart}_${safeExporter}.csv`;
       const mainCsv = toCSV(WO_HEADERS, rows);
       triggerDownload(mainCsv, mainFilename);
       const csvFiles = [{ filename: mainFilename, content: mainCsv }];
@@ -1462,7 +1462,7 @@ export default function App() {
         }
         if (delRows.length && delRows[delRows.length-1].length === 0) delRows.pop();
         if (delRows.length) {
-          const delFilename = `FieldNation_DEL_${safeProject}_${datePart}_${timePart}.csv`;
+          const delFilename = `FieldNation_DEL_${safeProject}_${datePart}_${safeExporter}.csv`;
           const delCsvContent = toCSV(WO_HEADERS, delRows);
           csvFiles.push({ filename: delFilename, content: delCsvContent });
           setTimeout(() => { triggerDownload(delCsvContent, delFilename); }, 500);
@@ -1480,7 +1480,7 @@ export default function App() {
         }
         if (brkRows.length && brkRows[brkRows.length-1].length === 0) brkRows.pop();
         if (brkRows.length) {
-          const brkFilename = `FieldNation_BRK_${safeProject}_${datePart}_${timePart}.csv`;
+          const brkFilename = `FieldNation_BRK_${safeProject}_${datePart}_${safeExporter}.csv`;
           const brkCsvContent = toCSV(WO_HEADERS, brkRows);
           csvFiles.push({ filename: brkFilename, content: brkCsvContent });
           setTimeout(() => { triggerDownload(brkCsvContent, brkFilename); }, includeDEL ? 1000 : 500);
@@ -1498,7 +1498,7 @@ export default function App() {
         }
         if (wrkRowsData.length && wrkRowsData[wrkRowsData.length-1].length === 0) wrkRowsData.pop();
         if (wrkRowsData.length) {
-          const wrkFilename = `FieldNation_WRK_${safeProject}_${datePart}_${timePart}.csv`;
+          const wrkFilename = `FieldNation_WRK_${safeProject}_${datePart}_${safeExporter}.csv`;
           const wrkCsvContent = toCSV(WO_HEADERS, wrkRowsData);
           csvFiles.push({ filename: wrkFilename, content: wrkCsvContent });
           setTimeout(() => { triggerDownload(wrkCsvContent, wrkFilename); }, (includeDEL && includeBRK) ? 1500 : (includeDEL || includeBRK) ? 1000 : 500);
@@ -1653,73 +1653,99 @@ export default function App() {
 
           {/* SDT per-WO config panel — only shown when SDT is selected */}
           {woType === "SDT" && (() => {
-            const SDT_ROWS = [
-              { key: "day1_ah1",  label: "Day 1 — AH(1)",      siteId: "xxxx-SDT-AH(1)", bundle: "AH" },
-              { key: "day23_bh1", label: "Day 2+3 — BH(1)",    siteId: "xxxx-SDT-BH(1)", bundle: "BH" },
-              { key: "day23_bh2", label: "Day 2+3 — BH(2)",    siteId: "xxxx-SDT-BH(2)", bundle: "BH" },
-              { key: "day23_ah1", label: "Day 2+3 — AH(1)",    siteId: "xxxx-SDT-AH(1)", bundle: "AH" },
-              { key: "day23_ah2", label: "Day 2+3 — AH(2)",    siteId: "xxxx-SDT-AH(2)", bundle: "AH" },
-            ];
-            const upd = (key, field, val) => setSdtConfig(prev => ({ ...prev, [key]: { ...prev[key], [field]: val } }));
+            const slots = Array.isArray(sdtConfig) ? sdtConfig : SDT_DEFAULTS;
+            let nextId = slots.reduce((m, s) => Math.max(m, parseInt(s.id?.replace("s","") || 0)), 0) + 1;
+            const updSlot = (id, field, val) => setSdtConfig(prev => prev.map(s => s.id === id ? { ...s, [field]: val } : s));
+            const removeSlot = (id) => setSdtConfig(prev => prev.length > 1 ? prev.filter(s => s.id !== id) : prev);
+            const addSlot = (type, day) => setSdtConfig(prev => {
+              const defaults = day === 1
+                ? { time: "2:00pm", hours: 10, budget: 650 }
+                : type === "BH" ? { time: "11:00am", hours: 8, budget: 450 } : { time: "4:00pm", hours: 10, budget: 600 };
+              const newSlot = { id: `s${nextId++}`, type, day, numTechs: 1, ...defaults };
+              // Insert after last slot of same day
+              const lastIdx = prev.reduce((m, s, i) => s.day === day ? i : m, -1);
+              const arr = [...prev];
+              arr.splice(lastIdx + 1, 0, newSlot);
+              return arr;
+            });
+
+            const totalWOs = slots.reduce((sum, s) => sum + (s.day === 23 ? 2 : 1) * (Number(s.numTechs) || 1), 0);
+
+            const renderSection = (day, label) => {
+              const daySlots = slots.filter(s => s.day === day);
+              // Compute display labels with sequential type counters
+              const typeCounter = {};
+              const labeled = daySlots.map(slot => {
+                const n = Number(slot.numTechs) || 1;
+                const start = (typeCounter[slot.type] || 0) + 1;
+                typeCounter[slot.type] = (typeCounter[slot.type] || 0) + n;
+                const numLabel = n === 1 ? `(${start})` : `(${start}–${start + n - 1})`;
+                return { slot, numLabel };
+              });
+
+              return (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ fontSize: 9, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.5 }}>{label}</div>
+                    <div style={{ display: "flex", gap: 5 }}>
+                      <button onClick={() => addSlot("BH", day)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 5, border: `1px solid #3b82f6`, background: "transparent", color: "#3b82f6", cursor: "pointer", fontFamily: "inherit" }}>+ BH</button>
+                      <button onClick={() => addSlot("AH", day)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 5, border: `1px solid #f59e0b`, background: "transparent", color: "#f59e0b", cursor: "pointer", fontFamily: "inherit" }}>+ AH</button>
+                    </div>
+                  </div>
+                  {labeled.map(({ slot, numLabel }) => (
+                    <div key={slot.id} style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr auto auto auto", gap: 5, alignItems: "center", padding: "7px 8px", background: T.surface2, borderRadius: 7, marginBottom: 5, borderLeft: `3px solid ${slot.type === "AH" ? "#f59e0b" : "#3b82f6"}` }}>
+                      {/* Type badge + WO label */}
+                      <div style={{ minWidth: 90 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: slot.type === "AH" ? "#f59e0b" : "#3b82f6" }}>{slot.type}{numLabel}</div>
+                        <div style={{ fontSize: 9, color: T.textFaint }}>xxxx-SDT-{slot.type}</div>
+                      </div>
+                      {/* Time */}
+                      <input value={slot.time} onChange={e => updSlot(slot.id, "time", e.target.value)} placeholder="11:00am"
+                        style={{ ...T.inp, fontSize: 11, padding: "4px 6px" }}
+                        onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+                      {/* Hours */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                        <input value={slot.hours} onChange={e => updSlot(slot.id, "hours", e.target.value)} type="number" min="1" placeholder="8"
+                          style={{ ...T.inp, width: 46, fontSize: 11, padding: "4px 5px" }}
+                          onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+                        <span style={{ fontSize: 9, color: T.textFaint }}>hrs</span>
+                        <span style={{ fontSize: 9, color: T.textFaint, marginLeft: 2 }}>$</span>
+                        <input value={slot.budget} onChange={e => updSlot(slot.id, "budget", e.target.value)} type="number" min="0" placeholder="450"
+                          style={{ ...T.inp, width: 56, fontSize: 11, padding: "4px 5px" }}
+                          onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+                      </div>
+                      {/* numTechs stepper */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                        <button onClick={() => updSlot(slot.id, "numTechs", Math.max(1, (Number(slot.numTechs) || 1) - 1))}
+                          style={{ width: 22, height: 22, borderRadius: 4, border: `1px solid ${T.border2}`, background: T.surface, color: T.textMid, cursor: "pointer", fontSize: 14, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+                        <div style={{ minWidth: 32, textAlign: "center" }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{slot.numTechs || 1}</div>
+                          <div style={{ fontSize: 8, color: T.textFaint, marginTop: -1 }}>techs</div>
+                        </div>
+                        <button onClick={() => updSlot(slot.id, "numTechs", (Number(slot.numTechs) || 1) + 1)}
+                          style={{ width: 22, height: 22, borderRadius: 4, border: `1px solid ${T.border2}`, background: T.surface, color: T.textMid, cursor: "pointer", fontSize: 14, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                      </div>
+                      {/* Remove */}
+                      <button onClick={() => removeSlot(slot.id)} disabled={slots.length <= 1}
+                        style={{ width: 22, height: 22, borderRadius: 4, border: `1px solid ${slots.length <= 1 ? T.border : "#ef4444"}`, background: "transparent", color: slots.length <= 1 ? T.border2 : "#ef4444", cursor: slots.length <= 1 ? "default" : "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                    </div>
+                  ))}
+                  {daySlots.length === 0 && <div style={{ fontSize: 11, color: T.textFaint, padding: "8px", fontStyle: "italic" }}>No WOs — use + buttons above to add</div>}
+                </div>
+              );
+            };
+
             return (
               <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.accent}40`, marginTop: 0 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                   <div style={{ fontSize: 10, color: T.accent, textTransform: "uppercase", letterSpacing: 2 }}>SDT Work Order Schedule</div>
-                  <button onClick={() => setSdtConfig({ ...SDT_DEFAULTS })} style={{ fontSize: 10, color: T.textFaint, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontFamily: "inherit" }}>↩ Reset to defaults</button>
+                  <button onClick={() => setSdtConfig([...SDT_DEFAULTS])} style={{ fontSize: 10, color: T.textFaint, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontFamily: "inherit" }}>↩ Reset</button>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 8, padding: "4px 8px" }}>
-                  <div style={{ fontSize: 9, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.5 }}>Work Order</div>
-                  <div style={{ fontSize: 9, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.5, textAlign: "center" }}>Start · Hours</div>
-                  <div style={{ fontSize: 9, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.5, textAlign: "right" }}>Budget</div>
-                </div>
-                {SDT_ROWS.map(({ key, label, siteId, bundle }) => {
-                  const row = sdtConfig[key] || SDT_DEFAULTS[key];
-                  return (
-                    <div key={key} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, alignItems: "center", padding: "8px", background: T.surface2, borderRadius: 8, marginBottom: 6, borderLeft: `3px solid ${bundle === "AH" ? "#f59e0b" : "#3b82f6"}` }}>
-                      <div>
-                        <div style={{ fontSize: 11, color: T.text, fontWeight: 600 }}>{label}</div>
-                        <div style={{ fontSize: 9, color: T.textFaint, marginTop: 1 }}>{siteId} · <span style={{ color: bundle === "AH" ? "#f59e0b" : "#3b82f6" }}>{bundle} bundle</span></div>
-                      </div>
-                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                        <input
-                          value={row.time}
-                          onChange={e => upd(key, "time", e.target.value)}
-                          placeholder="2:00pm"
-                          style={{ ...T.inp, flex: 1, fontSize: 11, padding: "4px 6px", minWidth: 0 }}
-                          onFocus={e => e.target.style.borderColor = T.accent}
-                          onBlur={e => e.target.style.borderColor = T.border2}
-                        />
-                        <input
-                          value={row.hours}
-                          onChange={e => upd(key, "hours", e.target.value)}
-                          placeholder="10"
-                          type="number"
-                          min="1"
-                          style={{ ...T.inp, width: 48, fontSize: 11, padding: "4px 6px" }}
-                          onFocus={e => e.target.style.borderColor = T.accent}
-                          onBlur={e => e.target.style.borderColor = T.border2}
-                        />
-                        <span style={{ fontSize: 10, color: T.textFaint, whiteSpace: "nowrap" }}>hrs</span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
-                        <span style={{ fontSize: 11, color: T.textFaint }}>$</span>
-                        <input
-                          value={row.budget}
-                          onChange={e => upd(key, "budget", e.target.value)}
-                          placeholder="650"
-                          type="number"
-                          min="0"
-                          style={{ ...T.inp, width: 72, fontSize: 11, padding: "4px 6px" }}
-                          onFocus={e => e.target.style.borderColor = T.accent}
-                          onBlur={e => e.target.style.borderColor = T.border2}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-                <div style={{ marginTop: 10, padding: "8px 12px", background: T.surface2, borderRadius: 7, fontSize: 11, color: T.textFaint, display: "flex", justifyContent: "space-between" }}>
-                  <span>9 WOs per site · Template <span style={{ color: T.textMid }}>104516</span></span>
-                  <span>AH bundle <span style={{ color: "#f59e0b" }}>■</span> &nbsp; BH bundle <span style={{ color: "#3b82f6" }}>■</span></span>
+                {renderSection(1, "Day 1")}
+                {renderSection(23, "Day 2 + Day 3")}
+                <div style={{ marginTop: 8, padding: "7px 12px", background: T.surface2, borderRadius: 7, fontSize: 11, color: T.textFaint, display: "flex", justifyContent: "space-between" }}>
+                  <span><span style={{ color: T.textMid, fontWeight: 600 }}>{totalWOs}</span> WOs per site · Template <span style={{ color: T.textMid }}>104516</span></span>
+                  <span>AH <span style={{ color: "#f59e0b" }}>■</span> &nbsp; BH <span style={{ color: "#3b82f6" }}>■</span></span>
                 </div>
               </div>
             );
@@ -2109,9 +2135,93 @@ export default function App() {
             <button onClick={downloadCSV} disabled={generating} style={{ width: "100%", padding: "1rem", borderRadius: 10, border: "none", cursor: generating ? "not-allowed" : "pointer", background: generating ? T.disabledBg : `linear-gradient(135deg,${T.accent},#dc6209)`, color: generating ? T.disabledText : "#000", fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, transition: "all .2s", boxShadow: generating ? "none" : "0 4px 24px rgba(234,88,12,.35)" }}>
               {generating ? "⏳  BUILDING CSV..." : (includeDEL || includeBRK || includeWRK) ? `⬇  DOWNLOAD ${woType}${includeDEL ? " + DEL" : ""}${includeBRK ? " + BRK" : ""}${includeWRK ? " + WRK" : ""} CSVs` : `⬇  DOWNLOAD ${woType} CSV`}
             </button>
-            <div style={{ fontSize: 11, color: T.textFaint, textAlign: "center", marginTop: 8 }}>
+
+            {/* Exporter name strip */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, padding: "7px 12px", background: T.surface, border: `1px solid ${exporterName ? T.accent + "50" : T.border}`, borderRadius: 8 }}>
+              <span style={{ fontSize: 11, color: T.textFaint, whiteSpace: "nowrap" }}>📋 Exported by:</span>
+              {exporterName ? (
+                <>
+                  <span style={{ fontSize: 12, color: T.textMid, fontWeight: 600, flex: 1 }}>{exporterName}</span>
+                  <button onClick={() => { setExporterInput(exporterName); setShowExporterModal(true); }} style={{ fontSize: 10, color: T.textFaint, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 5, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}>change</button>
+                </>
+              ) : (
+                <button onClick={() => { setExporterInput(""); setShowExporterModal(true); }} style={{ fontSize: 11, color: T.accent, background: "transparent", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" }}>Set your name (included in filename)</button>
+              )}
+            </div>
+
+            <div style={{ fontSize: 11, color: T.textFaint, textAlign: "center", marginTop: 6 }}>
               Single CSV file · Ready to upload directly to FieldNation
             </div>
+
+            {/* Add-on WOs section */}
+            <div style={{ marginTop: 16, border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden" }}>
+              <button onClick={() => setAddonExpanded(d => !d)} style={{ width: "100%", padding: "11px 16px", background: addonExpanded ? T.surface2 : T.surface, border: "none", borderBottom: addonExpanded ? `1px solid ${T.border}` : "none", color: T.textMid, cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, letterSpacing: 2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span>➕  GENERATE ADDITIONAL WOs FOR THESE SITES</span>
+                <span style={{ fontSize: 12, color: T.textFaint }}>{addonExpanded ? "▲" : "▼"}</span>
+              </button>
+              {addonExpanded && (() => {
+                const addonMeta = ALL_WO_TYPES[addonWoType] || {};
+                const downloadAddon = async () => {
+                  setAddonGenerating(true);
+                  try {
+                    const now = new Date();
+                    const datePart = now.toISOString().split("T")[0];
+                    const safeProject = projectId.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+                    const safeExp = exporterName.trim().replace(/[^a-zA-Z0-9]/g, "_").slice(0, 20) || "export";
+                    const rows = [];
+                    for (const site of sites.filter(rowComplete)) {
+                      const s = { ...site, numTechs: addonConfig.numTechs || addonMeta.numTechs || "1", numDays: addonConfig.numDays || addonMeta.numDays || "1", budgetTech: "", payRate: "", ...(addonConfig.date ? { date: addonConfig.date } : {}) };
+                      rows.push(...buildRows(s, projectId, displayName, addonWoType, addonConfig, ALL_WO_TYPES, sdtConfig));
+                    }
+                    if (rows.length && rows[rows.length - 1].length === 0) rows.pop();
+                    if (!rows.length) { alert("No rows generated — check config."); return; }
+                    const csv = toCSV(WO_HEADERS, rows);
+                    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url; a.download = `FieldNation_${addonWoType}_${safeProject}_${datePart}_${safeExp}_ADDON.csv`; a.style.display = "none";
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  } finally { setAddonGenerating(false); }
+                };
+                return (
+                  <div style={{ padding: "14px 16px", background: T.surface2 }}>
+                    <div style={{ fontSize: 10, color: T.textFaint, marginBottom: 10, lineHeight: 1.6 }}>
+                      Uses the same <strong style={{ color: T.textMid }}>{sites.filter(rowComplete).length} sites</strong> already loaded. Pick a WO type, configure, and download a separate CSV.
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                      <div style={{ gridColumn: "span 2" }}>
+                        <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>WO Type</label>
+                        <select value={addonWoType} onChange={e => { const k = e.target.value; setAddonWoType(k); setAddonConfig(WO_DEFAULTS[k] ? { ...WO_DEFAULTS[k] } : { templateId: "", startTime: "", date: "", techType: "Tech", numTechs: (ALL_WO_TYPES[k]?.numTechs || 1).toString(), numDays: (ALL_WO_TYPES[k]?.numDays || 1).toString(), budgetTech: "", payRate: "", approxHours: "", country: "US", payType: "Fixed" }); }} style={{ width: "100%", ...T.inp, fontSize: 13, height: 38, fontFamily: "inherit" }}>
+                          {Object.entries(ALL_WO_TYPES).map(([key, wot]) => (
+                            <option key={key} value={key}>{key} — {(wot.label || key).replace(/^[A-Z]+ — /, "")}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {[
+                        { key: "templateId", lbl: "Template ID", ph: "" },
+                        { key: "startTime",  lbl: "Start Time",  ph: "11:00am" },
+                        { key: "date",       lbl: "Date Override", ph: "", type: "date" },
+                        { key: "numDays",    lbl: "Days",        ph: "1" },
+                        { key: "budgetTech", lbl: "Budget $",    ph: "" },
+                        { key: "payRate",    lbl: "Pay Rate $",  ph: "" },
+                        { key: "approxHours",lbl: "Hours",       ph: "3" },
+                        { key: "country",    lbl: "Country",     ph: "US" },
+                      ].map(({ key, lbl, ph, type }) => (
+                        <div key={key}>
+                          <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>{lbl}</label>
+                          <input type={type || "text"} value={addonConfig[key] || ""} onChange={e => setAddonConfig(p => ({ ...p, [key]: e.target.value }))} placeholder={ph} style={{ ...T.inp, fontSize: 12 }} onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={downloadAddon} disabled={addonGenerating} style={{ width: "100%", padding: "10px", borderRadius: 8, border: "none", cursor: addonGenerating ? "not-allowed" : "pointer", background: addonGenerating ? T.disabledBg : `linear-gradient(135deg,#3b82f6,#1d4ed8)`, color: addonGenerating ? T.disabledText : "#fff", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}>
+                      {addonGenerating ? "⏳  BUILDING..." : `⬇  DOWNLOAD ${addonWoType} ADD-ON CSV`}
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
+
             <div style={{ textAlign: "center", marginTop: 16 }}>
               <button onClick={() => setStartOverConfirm(true)} style={{ background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 8, padding: "8px 24px", color: T.textDim, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
                 ↩ Start Over
@@ -2132,6 +2242,35 @@ export default function App() {
             </button>
           )}
         </div>
+
+        {/* Exporter name modal */}
+        {showExporterModal && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+            <div style={{ background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 14, padding: "2rem", width: "min(90vw, 360px)", boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
+              <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 22, letterSpacing: 3, color: T.accent, marginBottom: 6 }}>WHO'S EXPORTING?</div>
+              <div style={{ fontSize: 12, color: T.textDim, marginBottom: 16, lineHeight: 1.6 }}>Your name will be included in the CSV filename so it's easy to track who ran the export.</div>
+              <input
+                autoFocus
+                value={exporterInput}
+                onChange={e => setExporterInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && exporterInput.trim()) { const n = exporterInput.trim(); setExporterName(n); try { localStorage.setItem("cpwog_exporter", n); } catch {} setShowExporterModal(false); setTimeout(downloadCSV, 50); } if (e.key === "Escape") setShowExporterModal(false); }}
+                placeholder="e.g. Jordan"
+                style={{ ...T.inp, width: "100%", fontSize: 15, marginBottom: 12, boxSizing: "border-box" }}
+                onFocus={e => e.target.style.borderColor = T.accent}
+                onBlur={e => e.target.style.borderColor = T.border2}
+              />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setShowExporterModal(false)} style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textDim, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>Cancel</button>
+                <button
+                  disabled={!exporterInput.trim()}
+                  onClick={() => { const n = exporterInput.trim(); if (!n) return; setExporterName(n); try { localStorage.setItem("cpwog_exporter", n); } catch {} setShowExporterModal(false); setTimeout(downloadCSV, 50); }}
+                  style={{ flex: 2, padding: "10px", borderRadius: 8, border: "none", background: exporterInput.trim() ? `linear-gradient(135deg,${T.accent},#dc6209)` : T.disabledBg, color: exporterInput.trim() ? "#000" : T.disabledText, cursor: exporterInput.trim() ? "pointer" : "not-allowed", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}>
+                  SAVE &amp; DOWNLOAD
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Start Over modal */}
         {startOverConfirm && (
