@@ -57,6 +57,7 @@ export default function Step0Guided({ T, woType, setWoType, setWoConfig, WO_DEFA
                         INT: "Installation technician — one tech, flexible days",
                         INL: "Installation lead — one tech, flexible days",
                         WRK: "Walk-in ready kit — one tech, one day",
+                        SDT: "Security device technician — bundled BH/AH schedule over three days",
                       }[key] || wot.label || key;
                       return (
                         <div key={key} onClick={() => { setWoType(key); setWoConfig(WO_DEFAULTS[key] ? { ...WO_DEFAULTS[key] } : { templateId: "", startTime: "", defaultDate: "", techType: "Tech", numTechs: wot.numTechs?.toString() || "1", numDays: wot.numDays?.toString() || "1", budgetTech: "", payRate: "", approxHours: "", country: "" }); }}

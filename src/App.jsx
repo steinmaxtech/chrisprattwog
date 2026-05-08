@@ -73,6 +73,7 @@ const WO_TYPES = {
   INT:  { label: "INT — Installation Technician",        siteIdSuffix: "INT",    numTechs: 1, numDays: 1, useBundle: true  },
   INL:  { label: "INL — Installation Lead",              siteIdSuffix: "INL",    numTechs: 1, numDays: 1, useBundle: true  },
   WRK:  { label: "WRK — Walk In Ready Kit",            siteIdSuffix: "WRK",    numTechs: 1, numDays: 1, useBundle: false },
+  SDT:  { label: "SDT — Security Device Technician",    siteIdSuffix: "SDT",    numTechs: 1, numDays: 3, useBundle: true, specialPattern: "SDT" },
 };
 
 // Default configs per type — blank, user fills in each run
@@ -85,12 +86,59 @@ const WO_DEFAULTS = {
   INT:  { ...BLANK_CFG, templateId: "103096" },
   INL:  { ...BLANK_CFG, templateId: "103097" },
   WRK:  { ...BLANK_CFG, templateId: "" },
+  SDT:  { ...BLANK_CFG, templateId: "104516", techType: "Security Device Technician", numTechs: "1", numDays: "3", country: "US", payType: "Fixed" },
 };
+
+function buildSDTRows(site, projectId, displayName, cfg) {
+  const locPrefix = displayName.trim() || projectId;
+  const templateId = Number(cfg.templateId || 104516);
+  const country = cfg.country || "US";
+  const techType = cfg.techType || "Security Device Technician";
+  const payType = cfg.payType || "Fixed";
+  const schedule = [
+    { dayOffset: 0, period: "AH", slot: 1, startTime: "2:00pm", hours: 10, amount: 650 },
+    { dayOffset: 1, period: "BH", slot: 1, startTime: "11:00am", hours: 8, amount: 450 },
+    { dayOffset: 1, period: "BH", slot: 2, startTime: "11:00am", hours: 8, amount: 450 },
+    { dayOffset: 1, period: "AH", slot: 1, startTime: "4:00pm", hours: 10, amount: 600 },
+    { dayOffset: 1, period: "AH", slot: 2, startTime: "5:00pm", hours: 9, amount: 550 },
+    { dayOffset: 2, period: "BH", slot: 1, startTime: "11:00am", hours: 8, amount: 450 },
+    { dayOffset: 2, period: "BH", slot: 2, startTime: "11:00am", hours: 8, amount: 450 },
+    { dayOffset: 2, period: "AH", slot: 1, startTime: "4:00pm", hours: 10, amount: 600 },
+    { dayOffset: 2, period: "AH", slot: 2, startTime: "5:00pm", hours: 9, amount: 550 },
+  ];
+
+  return schedule.map((item) => {
+    const date = addDays(site.date, item.dayOffset);
+    const siteId = `${site.code}-SDT-${item.period}(${item.slot})`;
+    const bundle = `${site.code}-SDT-${item.period}`;
+    const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
+    return makeRow({
+      templateId,
+      projectId,
+      siteId,
+      bundle,
+      site,
+      date,
+      startTime: item.startTime,
+      techType,
+      budgetTech: item.amount,
+      maxBudget: item.amount,
+      payRate: item.amount,
+      approxHours: item.hours,
+      estDuration: item.hours,
+      country,
+      locName,
+      payType,
+      routeTo: ""
+    });
+  });
+}
 
 // Build rows using live woConfig values
 function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
   const locPrefix = displayName.trim() || projectId;
   const meta = (allTypes || {})[woType] || WO_TYPES[woType] || { siteIdSuffix: woType, numTechs: 1, numDays: 1, useBundle: false };
+  if (woType === "SDT" || meta.specialPattern === "SDT") return buildSDTRows(site, projectId, displayName, cfg);
   const rows = [];
   const tId = Number(cfg.templateId);
   const cfgBudget = Number(cfg.budgetTech);
@@ -153,6 +201,7 @@ const FN_TEMPLATE_BANK = [
   { id: "102222", name: "BRK — Backerboard Creation" },
   { id: "103096", name: "INT — Installation Technician" },
   { id: "103097", name: "INL — Installation Lead" },
+  { id: "104516", name: "SDT — Security Device Technician" },
 ];
 
 function normalizeTime(raw) {
@@ -1875,6 +1924,15 @@ export default function App() {
                 <span style={{ color: T.textDim }}>Budget / Pay Rate</span>
                 <span style={{ color: T.textMid }}>${woConfig.budgetTech} / ${woConfig.payRate}</span>
               </div>
+              {woType === "SDT" && (
+                <div style={{ fontSize: 12, padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
+                  <div style={{ color: T.textDim, marginBottom: 4 }}>SDT Schedule</div>
+                  <div style={{ color: T.textMid, fontSize: 11, lineHeight: 1.7 }}>
+                    Day 1: 1 AH · Day 2: 2 BH + 2 AH · Day 3: 2 BH + 2 AH<br />
+                    BH bundles together by site. AH bundles together by site. Template #104516.
+                  </div>
+                </div>
+              )}
               {(() => {
                 const rateOverrides = sites.filter(s => rowComplete(s) && (s.budgetTech || s.payRate));
                 if (!rateOverrides.length) return null;
@@ -1918,7 +1976,17 @@ export default function App() {
                   <div key={realIdx} style={{ background: T.surface2, borderRadius: 6, padding: "8px 10px", borderLeft: `3px solid ${s.womId ? T.accent : s.verified === true ? "#22c55e" : T.border}` }}>
                     <div style={{ fontSize: 12, color: T.accent, fontWeight: 600 }}>{s.code}{s.branchName ? ` — ${s.branchName}` : ""}</div>
                     <div style={{ fontSize: 11, color: T.textDim, marginTop: 2, lineHeight: 1.5 }}>{s.address}{s.address2 ? `, ${s.address2}` : ""}<br />{s.city}, {s.state} {s.zip}</div>
-                    <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>Start: {s.date}</div>
+                    <div style={{ marginTop: 6 }}>
+                      <label style={{ display: "block", fontSize: 9, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 3 }}>Start Date</label>
+                      <input
+                        type="date"
+                        value={s.date || ""}
+                        onChange={e => updateSite(realIdx, "date", e.target.value)}
+                        style={{ width: "100%", background: isPastDate(s.date) ? "rgba(239,68,68,0.15)" : T.surface, border: `1px solid ${isPastDate(s.date) ? "#ef4444" : T.border2}`, borderRadius: 5, padding: "4px 8px", color: T.text, fontSize: 10, fontFamily: "inherit" }}
+                        onFocus={e => e.target.style.borderColor = T.accent}
+                        onBlur={e => e.target.style.borderColor = isPastDate(s.date) ? "#ef4444" : T.border2}
+                      />
+                    </div>
                     {(s.budgetTech || s.payRate) && (
                       <div style={{ fontSize: 10, color: T.accent, marginTop: 2 }}>⚡ {s.budgetTech ? `$${s.budgetTech}` : `$${woConfig.budgetTech}`} / {s.payRate ? `$${s.payRate}` : `$${woConfig.payRate}`}</div>
                     )}
