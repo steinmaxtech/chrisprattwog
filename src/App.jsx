@@ -2587,12 +2587,8 @@ export default function App() {
                   <button onClick={() => {
                     const ids = [...new Set(routePasteText.split("\n").map(s => s.trim()).filter(Boolean))];
                     if (!ids.length) return;
-                    const links = ids.map(id => `<a href="https://app.fieldnation.com/p/${encodeURIComponent(id)}" target="_blank" rel="noopener" style="display:block;padding:14px 18px;margin-bottom:8px;background:#1a1a1a;color:#fb923c;border:1px solid #404040;border-radius:8px;font-family:monospace;font-size:16px;text-decoration:none;">🔗 Open profile ${id}</a>`).join("\n");
-                    const html = `<!DOCTYPE html><html><head><title>FN Profile Launcher</title><meta charset="utf-8"></head><body style="background:#0a0a0a;color:#e5e5e5;font-family:sans-serif;padding:24px;max-width:480px;margin:0 auto;"><h2 style="font-family:sans-serif;">FieldNation Profile Launcher</h2><p style="color:#9ca3af;font-size:13px;">Click each link below to open that provider's profile in a new tab (uses your logged-in FieldNation session).</p>${links}</body></html>`;
-                    const blob = new Blob([html], { type: "text/html" });
-                    const url = URL.createObjectURL(blob);
-                    window.open(url, "_blank");
-                  }} style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>🪟 Open All Profiles</button>
+                    ids.forEach(id => window.open(`https://app.fieldnation.com/p/${encodeURIComponent(id)}`, "_blank", "noopener"));
+                  }} title="If your browser blocks these, click the popup-blocked icon in the address bar and choose 'Always allow' for this site, then click again" style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>🪟 Open All Profiles</button>
                   {routePasteText && <button onClick={() => setRoutePasteText("")} style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>Clear</button>}
                 </div>
                 {routePasteText.trim() && (() => {
@@ -2600,6 +2596,7 @@ export default function App() {
                   const totalSlots = sites.filter(rowComplete).reduce((sum, s) => sum + (Number(s.numTechs || woConfig.numTechs) || 1), 0);
                   return <div style={{ fontSize: 10, color: T.textFaint, marginTop: 6 }}>{ids.length} ID{ids.length !== 1 ? "s" : ""} · {totalSlots} tech slot{totalSlots !== 1 ? "s" : ""} total{ids.length > totalSlots ? ` · ⚠ ${ids.length - totalSlots} extra ID${ids.length - totalSlots !== 1 ? "s" : ""} won't be used` : ids.length < totalSlots ? ` · ${totalSlots - ids.length} slot${totalSlots - ids.length !== 1 ? "s" : ""} will stay open` : " · exact match ✓"}</div>;
                 })()}
+                {routePasteText.trim() && <div style={{ fontSize: 9, color: T.textFaint, marginTop: 4 }}>"Open All Profiles" opens one tab per ID — if your browser blocks them, click the popup-blocked icon in the address bar, choose "Always allow", then click the button again.</div>}
                 {/* Verification results */}
                 {routePasteText.trim() && (() => {
                   const ids = routePasteText.split("\n").map(s => s.trim()).filter(Boolean);
