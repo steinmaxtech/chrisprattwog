@@ -489,6 +489,8 @@ export default function App() {
   const [showRoutePanel, setShowRoutePanel] = useState(false);
   const [showTimesPanel, setShowTimesPanel] = useState(false);
   const [routePasteText, setRoutePasteText] = useState("");
+  const [fnVerifyResults, setFnVerifyResults] = useState({}); // { [id]: { status, name, role, source } }
+  const [fnVerifying, setFnVerifying] = useState(false);
   const [woTemplates, setWoTemplates] = useState([]);
   const [showTemplatePanel, setShowTemplatePanel] = useState(false);
   const [templateSaveName, setTemplateSaveName] = useState("");
@@ -760,6 +762,29 @@ export default function App() {
     setIncludeWRK(!!tpl.includeWRK);
     if (tpl.wrkConfig) setWrkConfig({ ...tpl.wrkConfig });
     setShowTemplatePanel(false);
+  };
+
+  // Verify a batch of FieldNation provider IDs via /api/verify-fn
+  const verifyFnIds = async (ids) => {
+    const unique = [...new Set(ids.map(s => String(s).trim()).filter(Boolean))];
+    if (!unique.length) return;
+    setFnVerifying(true);
+    try {
+      const res = await fetch("/api/verify-fn", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: unique }),
+      });
+      const data = await res.json();
+      const next = {};
+      for (const r of (data.results || [])) next[r.id] = r;
+      setFnVerifyResults(prev => ({ ...prev, ...next }));
+    } catch (e) {
+      const next = {};
+      for (const id of unique) next[id] = { id, status: "unknown", error: e.message };
+      setFnVerifyResults(prev => ({ ...prev, ...next }));
+    }
+    setFnVerifying(false);
   };
 
   const saveCustomParsers = (next) => {
@@ -2555,12 +2580,40 @@ export default function App() {
                       return { ...s, routeToTechs: slots };
                     }));
                   }} style={{ flex: 1, padding: "9px 16px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5 }}>DISTRIBUTE IN ORDER</button>
+                  <button disabled={fnVerifying} onClick={() => {
+                    const ids = routePasteText.split("\n").map(s => s.trim()).filter(Boolean);
+                    verifyFnIds(ids);
+                  }} style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: fnVerifying ? T.textFaint : T.textMid, cursor: fnVerifying ? "default" : "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>{fnVerifying ? "Checking…" : "🔍 Verify IDs"}</button>
                   {routePasteText && <button onClick={() => setRoutePasteText("")} style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>Clear</button>}
                 </div>
                 {routePasteText.trim() && (() => {
                   const ids = routePasteText.split("\n").map(s => s.trim()).filter(Boolean);
                   const totalSlots = sites.filter(rowComplete).reduce((sum, s) => sum + (Number(s.numTechs || woConfig.numTechs) || 1), 0);
                   return <div style={{ fontSize: 10, color: T.textFaint, marginTop: 6 }}>{ids.length} ID{ids.length !== 1 ? "s" : ""} · {totalSlots} tech slot{totalSlots !== 1 ? "s" : ""} total{ids.length > totalSlots ? ` · ⚠ ${ids.length - totalSlots} extra ID${ids.length - totalSlots !== 1 ? "s" : ""} won't be used` : ids.length < totalSlots ? ` · ${totalSlots - ids.length} slot${totalSlots - ids.length !== 1 ? "s" : ""} will stay open` : " · exact match ✓"}</div>;
+                })()}
+                {/* Verification results */}
+                {routePasteText.trim() && (() => {
+                  const ids = routePasteText.split("\n").map(s => s.trim()).filter(Boolean);
+                  const checked = ids.filter(id => fnVerifyResults[id]);
+                  if (!checked.length) return null;
+                  return (
+                    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                      {ids.map(id => {
+                        const r = fnVerifyResults[id];
+                        if (!r) return null;
+                        const icon = r.status === "valid" ? "✅" : r.status === "invalid" ? "❌" : "❓";
+                        const color = r.status === "valid" ? "#22c55e" : r.status === "invalid" ? "#ef4444" : T.textFaint;
+                        return (
+                          <div key={id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color }}>
+                            <span>{icon}</span>
+                            <span style={{ fontFamily: "monospace", color: T.textMid }}>{id}</span>
+                            <span>{r.status === "valid" ? (r.name || "valid provider") : r.status === "invalid" ? "not found on FieldNation" : "couldn't verify"}</span>
+                          </div>
+                        );
+                      })}
+                      <div style={{ fontSize: 9, color: T.textFaint, marginTop: 2 }}>{fnVerifyResults[ids.find(id=>fnVerifyResults[id])]?.source === "api" ? "Verified via FieldNation API" : "Verified via public profile page — may be unreliable if FieldNation changes their site"}</div>
+                    </div>
+                  );
                 })()}
               </div>
 
@@ -2611,7 +2664,10 @@ export default function App() {
                       </div>
                       {/* One input per tech slot */}
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        {techSlots.map((val, ti) => (
+                        {techSlots.map((val, ti) => {
+                          const vr = val ? fnVerifyResults[val] : null;
+                          const vIcon = vr ? (vr.status === "valid" ? "✅" : vr.status === "invalid" ? "❌" : "❓") : null;
+                          return (
                           <div key={ti} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <div style={{ fontSize: 10, color: T.textFaint, width: 52, flexShrink: 0 }}>Tech {ti + 1}</div>
                             <input
@@ -2626,8 +2682,14 @@ export default function App() {
                               onFocus={e => e.target.style.borderColor=T.accent}
                               onBlur={e => e.target.style.borderColor=val ? T.accent : T.border2}
                             />
+                            {val && (
+                              <button title={vr ? (vr.status === "valid" ? (vr.name || "Valid") : vr.status === "invalid" ? "Not found on FieldNation" : "Couldn't verify") : "Verify this ID"} onClick={() => verifyFnIds([val])} disabled={fnVerifying} style={{ background: "transparent", border: "none", cursor: fnVerifying ? "default" : "pointer", fontSize: 14, flexShrink: 0, width: 22, textAlign: "center" }}>
+                                {vIcon || "🔍"}
+                              </button>
+                            )}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>{/* - */}
                     </div>
                   );
