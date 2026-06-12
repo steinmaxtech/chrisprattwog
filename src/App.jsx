@@ -2583,7 +2583,7 @@ export default function App() {
                   <button disabled={fnVerifying} onClick={() => {
                     const ids = routePasteText.split("\n").map(s => s.trim()).filter(Boolean);
                     verifyFnIds(ids);
-                  }} style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: fnVerifying ? T.textFaint : T.textMid, cursor: fnVerifying ? "default" : "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>{fnVerifying ? "Checking…" : "🔍 Verify IDs"}</button>
+                  }} style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: fnVerifying ? T.textFaint : T.textMid, cursor: fnVerifying ? "default" : "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>{fnVerifying ? "Checking…" : "🔍 Quick check"}</button>
                   {routePasteText && <button onClick={() => setRoutePasteText("")} style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>Clear</button>}
                 </div>
                 {routePasteText.trim() && (() => {
@@ -2594,24 +2594,24 @@ export default function App() {
                 {/* Verification results */}
                 {routePasteText.trim() && (() => {
                   const ids = routePasteText.split("\n").map(s => s.trim()).filter(Boolean);
-                  const checked = ids.filter(id => fnVerifyResults[id]);
-                  if (!checked.length) return null;
+                  if (!ids.length) return null;
+                  const anyChecked = ids.some(id => fnVerifyResults[id]);
                   return (
                     <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
                       {ids.map(id => {
                         const r = fnVerifyResults[id];
-                        if (!r) return null;
-                        const icon = r.status === "valid" ? "✅" : r.status === "invalid" ? "❌" : "❓";
-                        const color = r.status === "valid" ? "#22c55e" : r.status === "invalid" ? "#ef4444" : T.textFaint;
+                        const icon = r ? (r.status === "valid" ? "✅" : r.status === "invalid" ? "❌" : "❓") : "·";
+                        const color = r ? (r.status === "valid" ? "#22c55e" : r.status === "invalid" ? "#ef4444" : T.textFaint) : T.textFaint;
                         return (
                           <div key={id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color }}>
-                            <span>{icon}</span>
+                            <span style={{ width: 14, textAlign: "center" }}>{icon}</span>
                             <span style={{ fontFamily: "monospace", color: T.textMid }}>{id}</span>
-                            <span>{r.status === "valid" ? (r.name || "valid provider") : r.status === "invalid" ? "not found on FieldNation" : "couldn't verify"}</span>
+                            <span>{r ? (r.status === "valid" ? (r.name || r.note || "valid provider") : r.status === "invalid" ? "not found on FieldNation" : (r.note || "couldn't verify")) : ""}</span>
+                            <a href={`https://app.fieldnation.com/p/${encodeURIComponent(id)}`} target="_blank" rel="noopener noreferrer" title="Open this profile on FieldNation (uses your logged-in session)" style={{ marginLeft: "auto", textDecoration: "none", color: T.textMid }}>↗ open</a>
                           </div>
                         );
                       })}
-                      <div style={{ fontSize: 9, color: T.textFaint, marginTop: 2 }}>{fnVerifyResults[ids.find(id=>fnVerifyResults[id])]?.source === "api" ? "Verified via FieldNation API" : "Verified via public profile page — may be unreliable if FieldNation changes their site"}</div>
+                      {anyChecked && <div style={{ fontSize: 9, color: T.textFaint, marginTop: 2 }}>{fnVerifyResults[ids.find(id=>fnVerifyResults[id])]?.source === "api" ? "Quick check via FieldNation API" : "Quick check via public page — inconclusive results often need the ↗ open link to confirm with your logged-in session"}</div>}
                     </div>
                   );
                 })()}
@@ -2683,9 +2683,14 @@ export default function App() {
                               onBlur={e => e.target.style.borderColor=val ? T.accent : T.border2}
                             />
                             {val && (
-                              <button title={vr ? (vr.status === "valid" ? (vr.name || "Valid") : vr.status === "invalid" ? "Not found on FieldNation" : "Couldn't verify") : "Verify this ID"} onClick={() => verifyFnIds([val])} disabled={fnVerifying} style={{ background: "transparent", border: "none", cursor: fnVerifying ? "default" : "pointer", fontSize: 14, flexShrink: 0, width: 22, textAlign: "center" }}>
+                              <button title={vr ? (vr.status === "valid" ? (vr.name || vr.note || "Valid") : vr.status === "invalid" ? "Not found on FieldNation" : (vr.note || "Couldn't verify")) : "Quick check (server-side, may be inconclusive)"} onClick={() => verifyFnIds([val])} disabled={fnVerifying} style={{ background: "transparent", border: "none", cursor: fnVerifying ? "default" : "pointer", fontSize: 14, flexShrink: 0, width: 22, textAlign: "center" }}>
                                 {vIcon || "🔍"}
                               </button>
+                            )}
+                            {val && (
+                              <a href={`https://app.fieldnation.com/p/${encodeURIComponent(val)}`} target="_blank" rel="noopener noreferrer" title="Open this profile on FieldNation (uses your logged-in session)" style={{ fontSize: 14, flexShrink: 0, width: 22, textAlign: "center", textDecoration: "none", color: T.textMid }}>
+                                ↗
+                              </a>
                             )}
                           </div>
                           );
