@@ -2611,7 +2611,13 @@ export default function App() {
                           </div>
                         );
                       })}
-                      {anyChecked && <div style={{ fontSize: 9, color: T.textFaint, marginTop: 2 }}>{fnVerifyResults[ids.find(id=>fnVerifyResults[id])]?.source === "api" ? "Quick check via FieldNation API" : "Quick check via public page — inconclusive results often need the ↗ open link to confirm with your logged-in session"}</div>}
+                      {anyChecked && (() => {
+                        const src = fnVerifyResults[ids.find(id=>fnVerifyResults[id])]?.source;
+                        const label = src === "api" ? "Quick check via FieldNation API"
+                          : src === "cookie" ? "Verified using your FieldNation session"
+                          : "Quick check via public page — inconclusive results often need the ↗ open link to confirm with your logged-in session";
+                        return <div style={{ fontSize: 9, color: T.textFaint, marginTop: 2 }}>{label}</div>;
+                      })()}
                     </div>
                   );
                 })()}
