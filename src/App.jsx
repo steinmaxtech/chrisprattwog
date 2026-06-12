@@ -232,6 +232,15 @@ function addDays(dateStr, n) {
   return d.toISOString().split("T")[0];
 }
 
+// Formats a base date + day offset into a short readable label, e.g. "Mon 6/16"
+function dayLabel(baseDate, offset) {
+  if (!baseDate || !baseDate.trim()) return `Day ${offset + 1}`;
+  const d = new Date(baseDate + "T12:00:00");
+  if (isNaN(d.getTime())) return `Day ${offset + 1}`;
+  d.setDate(d.getDate() + offset);
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "numeric", day: "numeric" });
+}
+
 function toCSV(headers, rows) {
   const escape = (v) => {
     const s = v === null || v === undefined ? "" : String(v);
@@ -2674,7 +2683,7 @@ export default function App() {
                           const globalDay = (woConfig.perDayTimes && woConfig.startTimes && woConfig.startTimes[d]) ? woConfig.startTimes[d] : woConfig.startTime;
                           return (
                             <div key={d}>
-                              <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>Day {d + 1}</label>
+                              <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>{dayLabel(site.date, d)}</label>
                               <input
                                 style={{ ...T.inp, fontSize: 12, ...(startTimes[d] ? { borderColor: T.accent } : {}) }}
                                 placeholder={globalDay || "default"}
