@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import Step0Guided from './Step0Guided';
 import Step0Advanced from './Step0Advanced';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -128,10 +127,11 @@ function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
   const budget = site.budgetTech ? Number(site.budgetTech) : cfgBudget;
   const pay = site.payRate ? Number(site.payRate) : cfgPay;
 
-  // Per-day start/end time resolver — falls back to the main startTime/endTime
-  // when per-day overrides aren't enabled or aren't set for that day
+  // Per-day start/end time resolver — priority: per-site override > global per-day override > main startTime/endTime
   const timeForDay = (d) => {
-    const start = (cfg.perDayTimes && cfg.startTimes && cfg.startTimes[d]) ? cfg.startTimes[d] : cfg.startTime;
+    const siteOverride = (site.startTimes && site.startTimes[d]) ? site.startTimes[d] : "";
+    const globalDay = (cfg.perDayTimes && cfg.startTimes && cfg.startTimes[d]) ? cfg.startTimes[d] : "";
+    const start = siteOverride || globalDay || cfg.startTime;
     let end = "";
     if (cfg.checkInWindow) {
       end = (cfg.perDayTimes && cfg.endTimes && cfg.endTimes[d]) ? cfg.endTimes[d] : cfg.endTime;
@@ -248,7 +248,7 @@ function toCSV(headers, rows) {
 const EMPTY_SITE = () => ({
   code: "", branchName: "", address: "", address2: "",
   city: "", state: "", zip: "", date: "",
-  numTechs: "", numDays: "", budgetTech: "", payRate: "", womId: "", routeToTechs: [],
+  numTechs: "", numDays: "", budgetTech: "", payRate: "", womId: "", routeToTechs: [], startTimes: [],
   verified: null, verifying: false, verifyError: ""
 });
 
@@ -478,8 +478,8 @@ export default function App() {
   const [deletePwError, setDeletePwError] = useState(false);
   const [showRecoverModal, setShowRecoverModal] = useState(false);
   const [showRoutePanel, setShowRoutePanel] = useState(false);
+  const [showTimesPanel, setShowTimesPanel] = useState(false);
   const [routePasteText, setRoutePasteText] = useState("");
-  const [guidedMode, setGuidedMode] = useState(() => { try { return localStorage.getItem("cpwog_guided") !== "0"; } catch { return true; } });
   const [woTemplates, setWoTemplates] = useState([]);
   const [showTemplatePanel, setShowTemplatePanel] = useState(false);
   const [templateSaveName, setTemplateSaveName] = useState("");
@@ -1621,17 +1621,10 @@ export default function App() {
         </div>
 
 
-        {/* Step 0: Guided Mode */}
-        {step === 0 && guidedMode && (
-          <Step0Guided
-            T={T} woType={woType} setWoType={setWoType} setWoConfig={setWoConfig} WO_DEFAULTS={WO_DEFAULTS} ALL_WO_TYPES={ALL_WO_TYPES} woConfig={woConfig} projectId={projectId} setProjectId={setProjectId} displayName={displayName} setDisplayName={setDisplayName} projectIdHistory={projectIdHistory} showPidDropdown={showPidDropdown} setShowPidDropdown={setShowPidDropdown} woTemplates={woTemplates} applyTemplate={applyTemplate} includeDEL={includeDEL} setIncludeDEL={setIncludeDEL} includeBRK={includeBRK} setIncludeBRK={setIncludeBRK} includeWRK={includeWRK} setIncludeWRK={setIncludeWRK} setGuidedMode={setGuidedMode} guidedMode={guidedMode} isPastDate={isPastDate}
-          />
-        )}
-
-        {/* Step 0: Advanced Mode */}
-        {step === 0 && !guidedMode && (
+        {/* Step 0: Project Info + WO Type */}
+        {step === 0 && (
           <Step0Advanced
-            T={T} woType={woType} setWoType={setWoType} setWoConfig={setWoConfig} WO_DEFAULTS={WO_DEFAULTS} ALL_WO_TYPES={ALL_WO_TYPES} WO_TYPES={WO_TYPES} woConfig={woConfig} projectId={projectId} setProjectId={setProjectId} displayName={displayName} setDisplayName={setDisplayName} projectIdHistory={projectIdHistory} showPidDropdown={showPidDropdown} setShowPidDropdown={setShowPidDropdown} displayNameHistory={displayNameHistory} showDnDropdown={showDnDropdown} setShowDnDropdown={setShowDnDropdown} woTemplates={woTemplates} setShowTemplatePanel={setShowTemplatePanel} adminUnlocked={adminUnlocked} templateIdHistory={templateIdHistory} showTidDropdown={showTidDropdown} setShowTidDropdown={setShowTidDropdown} FN_TEMPLATE_BANK={FN_TEMPLATE_BANK} saveTemplateId={saveTemplateId} includeDEL={includeDEL} setIncludeDEL={setIncludeDEL} delConfig={delConfig} setDelConfig={setDelConfig} showDelTidDropdown={showDelTidDropdown} setShowDelTidDropdown={setShowDelTidDropdown} delTidLabelInput={delTidLabelInput} setDelTidLabelInput={setDelTidLabelInput} includeBRK={includeBRK} setIncludeBRK={setIncludeBRK} brkConfig={brkConfig} setBrkConfig={setBrkConfig} showBrkTidDropdown={showBrkTidDropdown} setShowBrkTidDropdown={setShowBrkTidDropdown} brkTidLabelInput={brkTidLabelInput} setBrkTidLabelInput={setBrkTidLabelInput} includeWRK={includeWRK} setIncludeWRK={setIncludeWRK} wrkConfig={wrkConfig} setWrkConfig={setWrkConfig} showWrkTidDropdown={showWrkTidDropdown} setShowWrkTidDropdown={setShowWrkTidDropdown} wrkTidLabelInput={wrkTidLabelInput} setWrkTidLabelInput={setWrkTidLabelInput} setGuidedMode={setGuidedMode} guidedMode={guidedMode} deletedBuiltins={deletedBuiltins} setDeleteConfirm={setDeleteConfirm} setDeletePw={setDeletePw} setDeletePwError={setDeletePwError} setEditingCustomKey={setEditingCustomKey} setCustomForm={setCustomForm} setShowCustomModal={setShowCustomModal} setShowRecoverModal={setShowRecoverModal} isPastDate={isPastDate} overriddenBuiltins={overriddenBuiltins}
+            T={T} woType={woType} setWoType={setWoType} setWoConfig={setWoConfig} WO_DEFAULTS={WO_DEFAULTS} ALL_WO_TYPES={ALL_WO_TYPES} WO_TYPES={WO_TYPES} woConfig={woConfig} projectId={projectId} setProjectId={setProjectId} displayName={displayName} setDisplayName={setDisplayName} projectIdHistory={projectIdHistory} showPidDropdown={showPidDropdown} setShowPidDropdown={setShowPidDropdown} displayNameHistory={displayNameHistory} showDnDropdown={showDnDropdown} setShowDnDropdown={setShowDnDropdown} woTemplates={woTemplates} setShowTemplatePanel={setShowTemplatePanel} adminUnlocked={adminUnlocked} templateIdHistory={templateIdHistory} showTidDropdown={showTidDropdown} setShowTidDropdown={setShowTidDropdown} FN_TEMPLATE_BANK={FN_TEMPLATE_BANK} saveTemplateId={saveTemplateId} includeDEL={includeDEL} setIncludeDEL={setIncludeDEL} delConfig={delConfig} setDelConfig={setDelConfig} showDelTidDropdown={showDelTidDropdown} setShowDelTidDropdown={setShowDelTidDropdown} delTidLabelInput={delTidLabelInput} setDelTidLabelInput={setDelTidLabelInput} includeBRK={includeBRK} setIncludeBRK={setIncludeBRK} brkConfig={brkConfig} setBrkConfig={setBrkConfig} showBrkTidDropdown={showBrkTidDropdown} setShowBrkTidDropdown={setShowBrkTidDropdown} brkTidLabelInput={brkTidLabelInput} setBrkTidLabelInput={setBrkTidLabelInput} includeWRK={includeWRK} setIncludeWRK={setIncludeWRK} wrkConfig={wrkConfig} setWrkConfig={setWrkConfig} showWrkTidDropdown={showWrkTidDropdown} setShowWrkTidDropdown={setShowWrkTidDropdown} wrkTidLabelInput={wrkTidLabelInput} setWrkTidLabelInput={setWrkTidLabelInput} deletedBuiltins={deletedBuiltins} setDeleteConfirm={setDeleteConfirm} setDeletePw={setDeletePw} setDeletePwError={setDeletePwError} setEditingCustomKey={setEditingCustomKey} setCustomForm={setCustomForm} setShowCustomModal={setShowCustomModal} setShowRecoverModal={setShowRecoverModal} isPastDate={isPastDate} overriddenBuiltins={overriddenBuiltins}
           />
         )}
 
@@ -1999,6 +1992,16 @@ export default function App() {
               return (
                 <button onClick={() => setShowRoutePanel(true)} style={{ width: "100%", marginBottom: 10, padding: "10px", borderRadius: 10, border: `1px solid ${routedCount > 0 ? T.accent : T.border2}`, background: routedCount > 0 ? `${T.accent}18` : "transparent", color: routedCount > 0 ? T.accentHi : T.textMid, cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                   🎯 {routedCount > 0 ? `ROUTE WOs  —  ${routedCount} of ${sites.filter(rowComplete).length} sites assigned` : "ROUTE WOs  —  OPTIONAL"}
+                </button>
+              );
+            })()}
+
+            {/* Per-Site Start Times button — only relevant for multi-day, non-SDT types */}
+            {woType !== "SDT" && Number(woConfig.numDays) > 1 && (() => {
+              const overrideCount = sites.filter(s => rowComplete(s) && (s.startTimes || []).some(Boolean)).length;
+              return (
+                <button onClick={() => setShowTimesPanel(true)} style={{ width: "100%", marginBottom: 10, padding: "10px", borderRadius: 10, border: `1px solid ${overrideCount > 0 ? T.accent : T.border2}`, background: overrideCount > 0 ? `${T.accent}18` : "transparent", color: overrideCount > 0 ? T.accentHi : T.textMid, cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  ⏰ {overrideCount > 0 ? `PER-SITE TIMES  —  ${overrideCount} of ${sites.filter(rowComplete).length} sites customized` : "PER-SITE START TIMES  —  OPTIONAL"}
                 </button>
               );
             })()}
@@ -2625,6 +2628,77 @@ export default function App() {
               {/* Footer */}
               <div style={{ padding: "1rem 1.5rem", borderTop: `1px solid ${T.border}`, position: "sticky", bottom: 0, background: T.surface }}>
                 <button onClick={() => setShowRoutePanel(false)} style={{ width: "100%", padding: "10px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}>DONE</button>
+              </div>{/* - */}
+
+            </div>{/* - */}
+          </div>
+        )}
+
+        {/* Per-Site Start Times panel */}
+        {showTimesPanel && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 400, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }} onClick={() => setShowTimesPanel(false)}>
+            <div style={{ background: T.surface, borderLeft: `2px solid ${T.accent}`, height: "100%", width: "100%", maxWidth: 460, overflowY: "auto", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div style={{ padding: "1.25rem 1.5rem", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, background: T.surface, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accentHi }}>⏰ PER-SITE START TIMES</div>
+                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 2 }}>Override the start time for specific days at specific sites · blank = use default</div>
+                </div>
+                <button onClick={() => setShowTimesPanel(false)} style={{ background: "transparent", border: "none", color: T.textMid, cursor: "pointer", fontSize: 20, flexShrink: 0 }}>✕</button>
+              </div>
+
+              {/* Per-site, per-day list */}
+              <div style={{ flex: 1, padding: "1rem 1.5rem", display: "flex", flexDirection: "column", gap: 12 }}>
+                {sites.map((site, realIdx) => rowComplete(site) ? (() => {
+                  const numDays = Math.max(1, Math.min(7, Number(site.numDays || woConfig.numDays) || 1));
+                  const days = Array.from({ length: numDays }, (_, i) => i);
+                  const startTimes = site.startTimes || [];
+                  const anyOverride = startTimes.some(Boolean);
+                  return (
+                    <div key={realIdx} style={{ background: T.surface2, border: `1px solid ${anyOverride ? T.accent : T.border}`, borderRadius: 10, padding: "0.85rem 1rem" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                        <div>
+                          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, letterSpacing: 1.5, color: anyOverride ? T.accentHi : T.textMid }}>
+                            {site.code}{site.branchName ? ` — ${site.branchName}` : ""}
+                          </div>
+                          <div style={{ fontSize: 10, color: T.textFaint, marginTop: 1 }}>{site.city}, {site.state} · {numDays} day{numDays > 1 ? "s" : ""} · Day 1: {site.date || "—"}</div>
+                        </div>
+                        {anyOverride && (
+                          <button onClick={() => setSites(prev => prev.map((s, idx) => idx === realIdx ? { ...s, startTimes: [] } : s))}
+                            style={{ background: "transparent", border: "none", color: T.textFaint, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>clear</button>
+                        )}
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: `repeat(${numDays}, 1fr)`, gap: 8 }}>
+                        {days.map(d => {
+                          const globalDay = (woConfig.perDayTimes && woConfig.startTimes && woConfig.startTimes[d]) ? woConfig.startTimes[d] : woConfig.startTime;
+                          return (
+                            <div key={d}>
+                              <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>Day {d + 1}</label>
+                              <input
+                                style={{ ...T.inp, fontSize: 12, ...(startTimes[d] ? { borderColor: T.accent } : {}) }}
+                                placeholder={globalDay || "default"}
+                                value={startTimes[d] || ""}
+                                onChange={e => {
+                                  const arr = [...startTimes];
+                                  arr[d] = e.target.value;
+                                  setSites(prev => prev.map((s, idx) => idx === realIdx ? { ...s, startTimes: arr } : s));
+                                }}
+                                onFocus={e => e.target.style.borderColor = T.accent}
+                                onBlur={e => e.target.style.borderColor = startTimes[d] ? T.accent : T.border2}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>{/* - */}
+                    </div>
+                  );
+                })() : null)}
+              </div>
+
+              {/* Footer */}
+              <div style={{ padding: "1rem 1.5rem", borderTop: `1px solid ${T.border}`, position: "sticky", bottom: 0, background: T.surface }}>
+                <button onClick={() => setShowTimesPanel(false)} style={{ width: "100%", padding: "10px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}>DONE</button>
               </div>{/* - */}
 
             </div>{/* - */}
