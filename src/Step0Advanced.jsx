@@ -23,6 +23,63 @@ function PayTypeToggle({ value, onChange, T }) {
   );
 }
 
+function ScheduleToggleRow({ checked, onClick, label, T }) {
+  return (
+    <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "6px 0" }}>
+      <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${checked ? T.accent : T.border2}`, background: checked ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        {checked && <span style={{ color: "#000", fontSize: 10, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+      </div>
+      <span style={{ fontSize: 11, color: checked ? T.text : T.textMid }}>{label}</span>
+    </div>
+  );
+}
+
+function ScheduleConfig({ cfg, setConfig, T }) {
+  const numDays = Math.max(1, Math.min(7, Number(cfg.numDays) || 1));
+  const days = Array.from({ length: numDays }, (_, i) => i);
+  const startTimes = cfg.startTimes || [];
+  const endTimes = cfg.endTimes || [];
+  return (
+    <div style={{ gridColumn: "span 2", borderTop: `1px solid ${T.border}`, paddingTop: 10, marginTop: 4 }}>
+      <ScheduleToggleRow checked={!!cfg.perDayTimes} onClick={() => setConfig(p => ({ ...p, perDayTimes: !p.perDayTimes }))} label="Use a different start time for each day" T={T} />
+      {cfg.perDayTimes && (
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${numDays}, 1fr)`, gap: 8, marginTop: 6, marginBottom: 6 }}>
+          {days.map(d => (
+            <div key={d}>
+              <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>Day {d + 1} Start</label>
+              <input style={{ ...T.inp, fontSize: 12 }} placeholder="1:00pm" value={startTimes[d] || ""} onChange={e => { const arr = [...startTimes]; arr[d] = e.target.value; setConfig(p => ({ ...p, startTimes: arr })); }} onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+            </div>
+          ))}
+        </div>
+      )}
+      <ScheduleToggleRow checked={!!cfg.checkInWindow} onClick={() => setConfig(p => ({ ...p, checkInWindow: !p.checkInWindow }))} label="Check-in window (start + end time) instead of a hard start" T={T} />
+      {cfg.checkInWindow && !cfg.perDayTimes && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 6 }}>
+          <div>
+            <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>Window Start</label>
+            <input style={{ ...T.inp, fontSize: 12 }} placeholder="1:00pm" value={cfg.startTime || ""} onChange={e => setConfig(p => ({ ...p, startTime: e.target.value }))} onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>Window End</label>
+            <input style={{ ...T.inp, fontSize: 12 }} placeholder="5:00pm" value={cfg.endTime || ""} onChange={e => setConfig(p => ({ ...p, endTime: e.target.value }))} onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+          </div>
+        </div>
+      )}
+      {cfg.checkInWindow && cfg.perDayTimes && (
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${numDays}, 1fr)`, gap: 8, marginTop: 6 }}>
+          {days.map(d => (
+            <div key={d}>
+              <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>Day {d + 1} End</label>
+              <input style={{ ...T.inp, fontSize: 12 }} placeholder="5:00pm" value={endTimes[d] || ""} onChange={e => { const arr = [...endTimes]; arr[d] = e.target.value; setConfig(p => ({ ...p, endTimes: arr })); }} onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ fontSize: 10, color: T.textFaint, marginTop: 8 }}>{cfg.checkInWindow ? "Rows include a start AND end time (check-in window)." : "Rows use a single hard start time."}{cfg.perDayTimes ? " Per-day times override the Start Time field above." : ""}</div>
+    </div>
+  );
+}
+
 function TidDropdown({ value, onChange, history, bank, show, setShow, tidLabel, setTidLabel, labelPh, T }) {
   return (
     <div style={{ position: "relative" }}>
@@ -98,13 +155,9 @@ function CompanionToggle({ flag, setFlag, label, desc, children, T }) {
   );
 }
 
-export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DEFAULTS, ALL_WO_TYPES, WO_TYPES, woConfig, projectId, setProjectId, displayName, setDisplayName, projectIdHistory, showPidDropdown, setShowPidDropdown, displayNameHistory, showDnDropdown, setShowDnDropdown, woTemplates, setShowTemplatePanel, adminUnlocked, templateIdHistory, showTidDropdown, setShowTidDropdown, FN_TEMPLATE_BANK, saveTemplateId, includeDEL, setIncludeDEL, delConfig, setDelConfig, showDelTidDropdown, setShowDelTidDropdown, delTidLabelInput, setDelTidLabelInput, includeBRK, setIncludeBRK, brkConfig, setBrkConfig, showBrkTidDropdown, setShowBrkTidDropdown, brkTidLabelInput, setBrkTidLabelInput, includeWRK, setIncludeWRK, wrkConfig, setWrkConfig, showWrkTidDropdown, setShowWrkTidDropdown, wrkTidLabelInput, setWrkTidLabelInput, setGuidedMode, guidedMode, deletedBuiltins, setDeleteConfirm, setDeletePw, setDeletePwError, setEditingCustomKey, setCustomForm, setShowCustomModal, setShowRecoverModal, isPastDate, overriddenBuiltins }) {
+export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DEFAULTS, ALL_WO_TYPES, WO_TYPES, woConfig, projectId, setProjectId, displayName, setDisplayName, projectIdHistory, showPidDropdown, setShowPidDropdown, displayNameHistory, showDnDropdown, setShowDnDropdown, woTemplates, setShowTemplatePanel, adminUnlocked, templateIdHistory, showTidDropdown, setShowTidDropdown, FN_TEMPLATE_BANK, saveTemplateId, includeDEL, setIncludeDEL, delConfig, setDelConfig, showDelTidDropdown, setShowDelTidDropdown, delTidLabelInput, setDelTidLabelInput, includeBRK, setIncludeBRK, brkConfig, setBrkConfig, showBrkTidDropdown, setShowBrkTidDropdown, brkTidLabelInput, setBrkTidLabelInput, includeWRK, setIncludeWRK, wrkConfig, setWrkConfig, showWrkTidDropdown, setShowWrkTidDropdown, wrkTidLabelInput, setWrkTidLabelInput, deletedBuiltins, setDeleteConfirm, setDeletePw, setDeletePwError, setEditingCustomKey, setCustomForm, setShowCustomModal, setShowRecoverModal, isPastDate, overriddenBuiltins }) {
   return (
     <div style={{ display: "grid", gap: 16 }}>
-
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button onClick={() => { const next = !guidedMode; setGuidedMode(next); try { localStorage.setItem("cpwog_guided", next ? "1" : "0"); } catch {} }} style={{ fontSize: 11, color: T.textFaint, background: "transparent", border: `1px solid ${T.border2}`, borderRadius: 20, padding: "4px 12px", cursor: "pointer", fontFamily: "inherit" }}>✦ Switch to Guided Mode</button>
-      </div>
 
       <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
         <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Project ID</label>
@@ -136,9 +189,9 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
               </div>
             )}
           </div>
+          <div style={{ fontSize: 10, color: "#6b7280", marginTop: 6 }}>Prefix used in FieldNation location names</div>
         </div>
       </div>
-      <div style={{ fontSize: 10, color: "#6b7280", marginTop: 6 }}>Prefix used in FieldNation location names</div>
 
       <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -146,7 +199,7 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
           {woTemplates.length > 0 && <button onClick={() => setShowTemplatePanel(true)} style={{ fontSize: 11, color: T.accent, background: "transparent", border: `1px solid ${T.accent}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit" }}>📋 Use Template</button>}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <select value={woType} onChange={e => { const k=e.target.value; const wot=ALL_WO_TYPES[k]||{}; setWoType(k); setWoConfig(WO_DEFAULTS[k]?{...WO_DEFAULTS[k]}:{templateId:"",startTime:"",defaultDate:"",techType:"Tech",numTechs:wot.numTechs?.toString()||"1",numDays:wot.numDays?.toString()||"1",budgetTech:"",payRate:"",approxHours:"",country:"US",payType:"Fixed"}); }} style={{ flex:1, ...T.inp, fontSize:14, height:42, fontFamily:"inherit" }}>
+          <select value={woType} onChange={e => { const k=e.target.value; const wot=ALL_WO_TYPES[k]||{}; setWoType(k); setWoConfig(WO_DEFAULTS[k]?{...WO_DEFAULTS[k]}:{templateId:"",startTime:"",endTime:"",defaultDate:"",techType:"Tech",numTechs:wot.numTechs?.toString()||"1",numDays:wot.numDays?.toString()||"1",budgetTech:"",payRate:"",approxHours:"",country:"US",payType:"Fixed",perDayTimes:false,startTimes:["","","","","","",""],checkInWindow:false,endTimes:["","","","","","",""]}); }} style={{ flex:1, ...T.inp, fontSize:14, height:42, fontFamily:"inherit" }}>
             {Object.entries(ALL_WO_TYPES).map(([key,wot]) => (
               <option key={key} value={key}>{key} — {(wot.label||key).replace(/^[A-Z]+ — /,"")}</option>
             ))}
@@ -158,20 +211,14 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
             </div>
           )}
         </div>
-        {woType && (() => { const wot=ALL_WO_TYPES[woType]||{}; return <div style={{ fontSize:11, color:T.textFaint, marginTop:6 }}>{wot.numTechs} tech{wot.numTechs>1?"s":""} × {wot.numDays} day{wot.numDays>1?"s":""}</div>; })()}
+        {woType && (() => { const wot=ALL_WO_TYPES[woType]||{}; if (woType==="SDT") return <div style={{ fontSize:11, color:T.textFaint, marginTop:6 }}>9 work orders × 3 days (fixed schedule, bundled AH/BH)</div>; return <div style={{ fontSize:11, color:T.textFaint, marginTop:6 }}>{wot.numTechs} tech{wot.numTechs>1?"s":""} × {wot.numDays} day{wot.numDays>1?"s":""}</div>; })()}
         {adminUnlocked && <button onClick={() => { setEditingCustomKey(null); setCustomForm({key:"",label:"",siteIdSuffix:"",numTechs:"1",numDays:"1",useBundle:false}); setShowCustomModal(true); }} style={{ marginTop:8, width:"100%", background:"transparent", border:`1px dashed ${T.border2}`, borderRadius:10, padding:"10px", color:T.textDim, cursor:"pointer", fontSize:12, fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }} onMouseEnter={e=>e.currentTarget.style.borderColor=T.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=T.border2}><span style={{fontSize:16}}>＋</span> Add Custom WO Type</button>}
         {adminUnlocked && Object.keys(deletedBuiltins||{}).length>0 && <button onClick={()=>setShowRecoverModal(true)} style={{ marginTop:6, width:"100%", background:"transparent", border:"1px dashed #22c55e", borderRadius:10, padding:"8px", color:"#22c55e", cursor:"pointer", fontSize:12, fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>↩ Recover Deleted ({Object.keys(deletedBuiltins||{}).length})</button>}
       </div>
 
-      {woType && (() => {
-        const isSdt = woType === "SDT";
-        const sdtGreyed = new Set(["startTime","numTechs","numDays","budgetTech","payRate","approxHours"]);
-        return (
-        <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}`, opacity: 1 }}>
-          <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>
-            Work Order Config
-            {isSdt && <span style={{ marginLeft: 8, color: "#f59e0b", fontSize: 9 }}>· dimmed fields controlled by SDT Schedule below</span>}
-          </div>
+      {woType && woType !== "SDT" && (
+        <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
+          <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>Work Order Config</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <TidDropdown value={woConfig.templateId} onChange={v=>setWoConfig(p=>({...p,templateId:v}))} history={templateIdHistory[woType]} bank={FN_TEMPLATE_BANK} show={showTidDropdown} setShow={setShowTidDropdown} tidLabel="" setTidLabel={()=>{}} labelPh="Label" T={T} />
             {[
@@ -184,28 +231,32 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
               {key:"payRate",lbl:"Pay Rate $",ph:""},
               {key:"approxHours",lbl:"Est. Hours",ph:"3"},
               {key:"country",lbl:"Country",ph:"US"},
-            ].map(({key,lbl,ph,type}) => {
-              const dimmed = isSdt && sdtGreyed.has(key);
-              return (
-                <div key={key} style={{ opacity: dimmed ? 0.35 : 1, pointerEvents: dimmed ? "none" : "auto" }}>
-                  <label style={{ display:"block", fontSize:10, color:T.textDim, textTransform:"uppercase", letterSpacing:1.5, marginBottom:4 }}>{lbl}</label>
-                  <input type={type||"text"} placeholder={ph||""} value={woConfig[key]||""} onChange={e=>setWoConfig(p=>({...p,[key]:e.target.value}))} onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border2} style={T.inp} />
-                </div>
-              );
-            })}
-            <div style={{ opacity: isSdt ? 0.35 : 1, pointerEvents: isSdt ? "none" : "auto", gridColumn:"span 2" }}>
-              <PayTypeToggle value={woConfig.payType} onChange={v=>setWoConfig(p=>({...p,payType:v}))} T={T} />
-            </div>
+            ].map(({key,lbl,ph,type}) => (
+              <FieldInput key={key} label={lbl} value={woConfig[key]} onChange={e=>setWoConfig(p=>({...p,[key]:e.target.value}))} ph={ph} type={type} T={T} />
+            ))}
+            <PayTypeToggle value={woConfig.payType} onChange={v=>setWoConfig(p=>({...p,payType:v}))} T={T} />
+            <ScheduleConfig cfg={woConfig} setConfig={setWoConfig} T={T} />
           </div>
           <div style={{ marginTop:12, padding:"8px 12px", background:T.surface2, borderRadius:7, fontSize:11, color:T.textFaint }}>
-            {isSdt
-              ? <span>Template: <span style={{color:T.textMid}}>{woConfig.templateId||"—"}</span> · Start date set per site in table</span>
-              : <span>Pattern: <span style={{color:T.textMid}}>{woConfig.numTechs} tech{Number(woConfig.numTechs)>1?"s":""} × {woConfig.numDays} day{Number(woConfig.numDays)>1?"s":""}</span> · Template: <span style={{color:T.textMid}}>{woConfig.templateId||"—"}</span></span>
-            }
+            Pattern: <span style={{color:T.textMid}}>{woConfig.numTechs} tech{Number(woConfig.numTechs)>1?"s":""} × {woConfig.numDays} day{Number(woConfig.numDays)>1?"s":""}</span> · Template: <span style={{color:T.textMid}}>{woConfig.templateId||"—"}</span>
           </div>
         </div>
-        );
-      })()}
+      )}
+
+      {woType === "SDT" && (
+        <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
+          <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>Work Order Config — SDT</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <TidDropdown value={woConfig.templateId} onChange={v=>setWoConfig(p=>({...p,templateId:v}))} history={templateIdHistory[woType]} bank={FN_TEMPLATE_BANK} show={showTidDropdown} setShow={setShowTidDropdown} tidLabel="" setTidLabel={()=>{}} labelPh="Label" T={T} />
+            <FieldInput label="Default Start Date" value={woConfig.defaultDate} onChange={e=>setWoConfig(p=>({...p,defaultDate:e.target.value}))} ph="" type="date" T={T} />
+            <FieldInput label="Tech Type" value={woConfig.techType} onChange={e=>setWoConfig(p=>({...p,techType:e.target.value}))} ph="Tech" T={T} />
+            <FieldInput label="Country" value={woConfig.country} onChange={e=>setWoConfig(p=>({...p,country:e.target.value}))} ph="US" T={T} />
+          </div>
+          <div style={{ marginTop: 12, padding: "10px 12px", background: T.surface2, borderRadius: 7, fontSize: 11, color: T.textFaint, lineHeight: 1.7 }}>
+            SDT generates a fixed <span style={{color:T.textMid}}>9-row, 3-day schedule</span> per site (1 AH on Day 1, then 2 BH + 2 AH on Days 2 and 3), bundled separately by AH/BH group. Site IDs follow <span style={{color:T.textMid}}>xxxx-SDT-AH(#)</span> / <span style={{color:T.textMid}}>xxxx-SDT-BH(#)</span>. Pay is Fixed per row ($450–$650) and isn't configurable here.
+          </div>
+        </div>
+      )}
 
       <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
         <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Companion Work Orders</div>
