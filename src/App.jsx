@@ -2564,7 +2564,7 @@ export default function App() {
                   onFocus={e => e.target.style.borderColor=T.accent}
                   onBlur={e => e.target.style.borderColor=T.border2}
                 />
-                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                   <button onClick={() => {
                     const ids = routePasteText.split("\n").map(s => s.trim()).filter(Boolean);
                     if (!ids.length) return;
@@ -2584,6 +2584,10 @@ export default function App() {
                     const ids = routePasteText.split("\n").map(s => s.trim()).filter(Boolean);
                     verifyFnIds(ids);
                   }} style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: fnVerifying ? T.textFaint : T.textMid, cursor: fnVerifying ? "default" : "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>{fnVerifying ? "Checking…" : "🔍 Quick check"}</button>
+                  <button onClick={() => {
+                    const ids = [...new Set(routePasteText.split("\n").map(s => s.trim()).filter(Boolean))];
+                    ids.forEach(id => window.open(`https://app.fieldnation.com/p/${encodeURIComponent(id)}`, "_blank"));
+                  }} style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>🪟 Open All Profiles</button>
                   {routePasteText && <button onClick={() => setRoutePasteText("")} style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>Clear</button>}
                 </div>
                 {routePasteText.trim() && (() => {
@@ -2614,7 +2618,6 @@ export default function App() {
                       {anyChecked && (() => {
                         const src = fnVerifyResults[ids.find(id=>fnVerifyResults[id])]?.source;
                         const label = src === "api" ? "Quick check via FieldNation API"
-                          : src === "cookie" ? "Verified using your FieldNation session"
                           : "Quick check via public page — inconclusive results often need the ↗ open link to confirm with your logged-in session";
                         return <div style={{ fontSize: 9, color: T.textFaint, marginTop: 2 }}>{label}</div>;
                       })()}
