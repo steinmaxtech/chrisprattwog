@@ -1,5 +1,14 @@
 import React from "react";
 
+// Formats a date string + day offset into a short readable label, e.g. "Mon 6/16"
+function dayLabel(baseDate, offset) {
+  if (!baseDate) return `Day ${offset + 1}`;
+  const d = new Date(baseDate + "T12:00:00");
+  if (isNaN(d.getTime())) return `Day ${offset + 1}`;
+  d.setDate(d.getDate() + offset);
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "numeric", day: "numeric" });
+}
+
 function FieldInput({ label, value, onChange, ph, type, hint, T }) {
   return (
     <div>
@@ -46,7 +55,7 @@ function ScheduleConfig({ cfg, setConfig, T }) {
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${numDays}, 1fr)`, gap: 8, marginTop: 6, marginBottom: 6 }}>
           {days.map(d => (
             <div key={d}>
-              <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>Day {d + 1} Start</label>
+              <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>{dayLabel(cfg.defaultDate, d)} Start</label>
               <input style={{ ...T.inp, fontSize: 12 }} placeholder="1:00pm" value={startTimes[d] || ""} onChange={e => { const arr = [...startTimes]; arr[d] = e.target.value; setConfig(p => ({ ...p, startTimes: arr })); }} onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
             </div>
           ))}
@@ -69,13 +78,13 @@ function ScheduleConfig({ cfg, setConfig, T }) {
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${numDays}, 1fr)`, gap: 8, marginTop: 6 }}>
           {days.map(d => (
             <div key={d}>
-              <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>Day {d + 1} End</label>
+              <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>{dayLabel(cfg.defaultDate, d)} End</label>
               <input style={{ ...T.inp, fontSize: 12 }} placeholder="5:00pm" value={endTimes[d] || ""} onChange={e => { const arr = [...endTimes]; arr[d] = e.target.value; setConfig(p => ({ ...p, endTimes: arr })); }} onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
             </div>
           ))}
         </div>
       )}
-      <div style={{ fontSize: 10, color: T.textFaint, marginTop: 8 }}>{cfg.checkInWindow ? "Rows include a start AND end time (check-in window)." : "Rows use a single hard start time."}{cfg.perDayTimes ? " Per-day times override the Start Time field above." : ""}</div>
+      <div style={{ fontSize: 10, color: T.textFaint, marginTop: 8 }}>{cfg.checkInWindow ? "Rows include a start AND end time (check-in window)." : "Rows use a single hard start time."}{cfg.perDayTimes ? " Per-day times override the Start Time field above." : ""}{cfg.perDayTimes && !cfg.defaultDate ? " Set a Default Start Date above to see real day-of-week dates here." : ""}</div>
     </div>
   );
 }
