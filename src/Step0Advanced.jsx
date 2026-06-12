@@ -1,218 +1,285 @@
-// api/verify-fn.js — Vercel serverless function
-// Verifies whether a FieldNation provider/user ID is real.
-//
-// Three modes, tried in order:
-//  1. OFFICIAL API — if FN_CLIENT_ID + FN_CLIENT_SECRET env vars are set,
-//     uses FieldNation's OAuth2 client-credentials flow to call
-//     GET /api/users/{id} and returns the provider's name/role/status.
-//  2. SESSION COOKIE — if FN_SESSION_COOKIE env var is set (a copy of your
-//     logged-in browser's Cookie header for app.fieldnation.com), fetches
-//     /p/{id} AS YOU and reads the real authenticated profile page.
-//     Rotate this value if it stops working (session expired).
-//  3. PUBLIC PAGE FALLBACK — no credentials configured: fetches /p/{id}
-//     unauthenticated and infers valid/invalid from status + redirect.
-//     Least reliable since app.fieldnation.com requires login.
-//
-// POST body: { ids: ["12345", "67890", ...] }
-// Response:  { results: [{ id, status: "valid"|"invalid"|"unknown", name, role, source }] }
+import React from "react";
 
-const FN_API_BASE = "https://api.fieldnation.com";
-const FN_TOKEN_URL = "https://api.fieldnation.com/oauth/token";
-const FN_PROFILE_URL = (id) => `https://app.fieldnation.com/p/${id}`;
-
-let cachedToken = null;
-let cachedTokenExpiry = 0;
-
-async function getApiToken() {
-  const clientId = process.env.FN_CLIENT_ID;
-  const clientSecret = process.env.FN_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return null;
-
-  const now = Date.now();
-  if (cachedToken && now < cachedTokenExpiry - 30_000) return cachedToken;
-
-  try {
-    const res = await fetch(FN_TOKEN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "client_credentials",
-        client_id: clientId,
-        client_secret: clientSecret,
-      }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.access_token) return null;
-    cachedToken = data.access_token;
-    cachedTokenExpiry = now + (Number(data.expires_in) || 3600) * 1000;
-    return cachedToken;
-  } catch {
-    return null;
-  }
+// Formats a date string + day offset into a short readable label, e.g. "Mon 6/16"
+function dayLabel(baseDate, offset) {
+  if (!baseDate) return `Day ${offset + 1}`;
+  const d = new Date(baseDate + "T12:00:00");
+  if (isNaN(d.getTime())) return `Day ${offset + 1}`;
+  d.setDate(d.getDate() + offset);
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "numeric", day: "numeric" });
 }
 
-async function verifyViaApi(id, token) {
-  try {
-    const res = await fetch(`${FN_API_BASE}/api/users/${encodeURIComponent(id)}`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    });
-    if (res.status === 404) {
-      return { id, status: "invalid", name: "", role: "", source: "api" };
-    }
-    if (!res.ok) {
-      return { id, status: "unknown", name: "", role: "", source: "api", error: `HTTP ${res.status}` };
-    }
-    const data = await res.json();
-    if (!data || !data.id) {
-      return { id, status: "invalid", name: "", role: "", source: "api" };
-    }
-    const name = [data.first_name, data.last_name].filter(Boolean).join(" ");
-    return { id, status: "valid", name, role: data.role_type || "", source: "api" };
-  } catch (e) {
-    return { id, status: "unknown", name: "", role: "", source: "api", error: e.message };
-  }
+function FieldInput({ label, value, onChange, ph, type, hint, T }) {
+  return (
+    <div>
+      <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>{label}</label>
+      <input style={T.inp} type={type || "text"} placeholder={ph || ""} value={value || ""} onChange={onChange} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => e.target.style.borderColor=T.border2} />
+      {hint && <div style={{ fontSize: 10, color: T.textFaint, marginTop: 3 }}>{hint}</div>}
+    </div>
+  );
 }
 
-async function verifyViaSessionCookie(id, cookie) {
-  try {
-    const res = await fetch(FN_PROFILE_URL(id), {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; CPWOG-Verify/1.0)",
-        Cookie: cookie,
-      },
-      redirect: "follow",
-    });
-
-    if (res.status === 404) {
-      return { id, status: "invalid", name: "", role: "", source: "cookie" };
-    }
-    if (res.status >= 500) {
-      return { id, status: "unknown", name: "", role: "", source: "cookie", error: `HTTP ${res.status}` };
-    }
-
-    const html = await res.text();
-    const lower = html.toLowerCase();
-    const finalUrl = res.url || "";
-
-    const notFoundMarkers = ["page not found", "user not found", "profile not found", "doesn't exist", "does not exist", "we can't find that"];
-    if (notFoundMarkers.some(m => lower.includes(m))) {
-      return { id, status: "invalid", name: "", role: "", source: "cookie" };
-    }
-
-    // If we got bounced to a login page, the session cookie has expired/is invalid
-    const redirectedToLogin = /\/(login|signin|sign-in|auth)/i.test(finalUrl) || lower.includes("please log in") || lower.includes("sign in to continue");
-    if (redirectedToLogin) {
-      return { id, status: "unknown", name: "", role: "", source: "cookie", note: "session cookie expired — update FN_SESSION_COOKIE in Vercel" };
-    }
-
-    // Authenticated profile page — pull a name from title/og:title
-    let name = "";
-    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-    const ogMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i);
-    if (ogMatch) name = ogMatch[1].trim();
-    else if (titleMatch) name = titleMatch[1].replace(/\s*\|\s*Field\s*Nation.*$/i, "").trim();
-
-    if (!name || /^(field\s*nation|login|sign\s*in|dashboard)$/i.test(name)) {
-      return { id, status: "unknown", name: "", role: "", source: "cookie", note: "couldn't read profile name from page" };
-    }
-
-    return { id, status: "valid", name, role: "", source: "cookie" };
-  } catch (e) {
-    return { id, status: "unknown", name: "", role: "", source: "cookie", error: e.message };
-  }
+function PayTypeToggle({ value, onChange, T }) {
+  const active = value || "Fixed";
+  return (
+    <div style={{ gridColumn: "span 2" }}>
+      <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>Pay Type</label>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => onChange("Fixed")} style={{ flex:1, padding:"8px", borderRadius:8, border:`2px solid ${active==="Fixed"?"#e97316":"#404040"}`, background:active==="Fixed"?"rgba(234,88,12,0.13)":"transparent", color:active==="Fixed"?"#fb923c":"#9ca3af", cursor:"pointer", fontFamily:"'Bebas Neue',sans-serif", fontSize:15, letterSpacing:2 }}>Fixed</button>
+        <button onClick={() => onChange("Hourly")} style={{ flex:1, padding:"8px", borderRadius:8, border:`2px solid ${active==="Hourly"?"#e97316":"#404040"}`, background:active==="Hourly"?"rgba(234,88,12,0.13)":"transparent", color:active==="Hourly"?"#fb923c":"#9ca3af", cursor:"pointer", fontFamily:"'Bebas Neue',sans-serif", fontSize:15, letterSpacing:2 }}>Hourly</button>
+      </div>
+    </div>
+  );
 }
 
-
-  try {
-    const res = await fetch(FN_PROFILE_URL(id), {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; CPWOG-Verify/1.0)" },
-      redirect: "follow",
-    });
-
-    // A hard 404 means the ID itself is invalid/doesn't exist
-    if (res.status === 404) {
-      return { id, status: "invalid", name: "", role: "", source: "page" };
-    }
-    if (res.status >= 500) {
-      return { id, status: "unknown", name: "", role: "", source: "page", error: `HTTP ${res.status}` };
-    }
-
-    const html = await res.text();
-    const lower = html.toLowerCase();
-    const finalUrl = res.url || "";
-
-    // Explicit "not found" content — invalid ID
-    const notFoundMarkers = ["page not found", "user not found", "profile not found", "doesn't exist", "does not exist", "we can't find that"];
-    if (notFoundMarkers.some(m => lower.includes(m))) {
-      return { id, status: "invalid", name: "", role: "", source: "page" };
-    }
-
-    // app.fieldnation.com requires login — an unauthenticated request to a VALID
-    // profile typically redirects to /login (or similar) but PRESERVES a redirect
-    // target referencing the id, while an INVALID id is more likely to bounce to
-    // a generic dashboard/404. Treat a login redirect that still references the
-    // requested id as "exists, but login required to view details".
-    const redirectedToLogin = /\/(login|signin|sign-in|auth)/i.test(finalUrl) || lower.includes("log in") || lower.includes("sign in");
-    if (redirectedToLogin) {
-      if (finalUrl.includes(`/p/${id}`) || lower.includes(`/p/${id}`)) {
-        return { id, status: "valid", name: "", role: "", source: "page", note: "exists — login required for details" };
-      }
-      return { id, status: "unknown", name: "", role: "", source: "page", note: "redirected to login, couldn't confirm ID" };
-    }
-
-    // Try to pull a name out of <title> or og:title meta tag
-    let name = "";
-    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-    const ogMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i);
-    if (ogMatch) name = ogMatch[1].trim();
-    else if (titleMatch) name = titleMatch[1].replace(/\s*\|\s*Field\s*Nation.*$/i, "").trim();
-
-    // If we landed on a generic page with no useful title, treat as unknown
-    if (!name || /^(field\s*nation|login|sign\s*in|dashboard)$/i.test(name)) {
-      return { id, status: "unknown", name: "", role: "", source: "page" };
-    }
-
-    return { id, status: "valid", name, role: "", source: "page" };
-  } catch (e) {
-    return { id, status: "unknown", name: "", role: "", source: "page", error: e.message };
-  }
+function ScheduleToggleRow({ checked, onClick, label, T }) {
+  return (
+    <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "6px 0" }}>
+      <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${checked ? T.accent : T.border2}`, background: checked ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        {checked && <span style={{ color: "#000", fontSize: 10, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+      </div>
+      <span style={{ fontSize: 11, color: checked ? T.text : T.textMid }}>{label}</span>
+    </div>
+  );
 }
 
-export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+function ScheduleConfig({ cfg, setConfig, T }) {
+  const numDays = Math.max(1, Math.min(7, Number(cfg.numDays) || 1));
+  const days = Array.from({ length: numDays }, (_, i) => i);
+  const startTimes = cfg.startTimes || [];
+  const endTimes = cfg.endTimes || [];
+  return (
+    <div style={{ gridColumn: "span 2", borderTop: `1px solid ${T.border}`, paddingTop: 10, marginTop: 4 }}>
+      <ScheduleToggleRow checked={!!cfg.perDayTimes} onClick={() => setConfig(p => ({ ...p, perDayTimes: !p.perDayTimes }))} label="Use a different start time for each day" T={T} />
+      {cfg.perDayTimes && (
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${numDays}, 1fr)`, gap: 8, marginTop: 6, marginBottom: 6 }}>
+          {days.map(d => (
+            <div key={d}>
+              <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>{dayLabel(cfg.defaultDate, d)} Start</label>
+              <input style={{ ...T.inp, fontSize: 12 }} placeholder="1:00pm" value={startTimes[d] || ""} onChange={e => { const arr = [...startTimes]; arr[d] = e.target.value; setConfig(p => ({ ...p, startTimes: arr })); }} onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+            </div>
+          ))}
+        </div>
+      )}
+      <ScheduleToggleRow checked={!!cfg.checkInWindow} onClick={() => setConfig(p => ({ ...p, checkInWindow: !p.checkInWindow }))} label="Check-in window (start + end time) instead of a hard start" T={T} />
+      {cfg.checkInWindow && !cfg.perDayTimes && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 6 }}>
+          <div>
+            <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>Window Start</label>
+            <input style={{ ...T.inp, fontSize: 12 }} placeholder="1:00pm" value={cfg.startTime || ""} onChange={e => setConfig(p => ({ ...p, startTime: e.target.value }))} onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>Window End</label>
+            <input style={{ ...T.inp, fontSize: 12 }} placeholder="5:00pm" value={cfg.endTime || ""} onChange={e => setConfig(p => ({ ...p, endTime: e.target.value }))} onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+          </div>
+        </div>
+      )}
+      {cfg.checkInWindow && cfg.perDayTimes && (
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${numDays}, 1fr)`, gap: 8, marginTop: 6 }}>
+          {days.map(d => (
+            <div key={d}>
+              <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>{dayLabel(cfg.defaultDate, d)} End</label>
+              <input style={{ ...T.inp, fontSize: 12 }} placeholder="5:00pm" value={endTimes[d] || ""} onChange={e => { const arr = [...endTimes]; arr[d] = e.target.value; setConfig(p => ({ ...p, endTimes: arr })); }} onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ fontSize: 10, color: T.textFaint, marginTop: 8 }}>{cfg.checkInWindow ? "Rows include a start AND end time (check-in window)." : "Rows use a single hard start time."}{cfg.perDayTimes ? " Per-day times override the Start Time field above." : ""}{cfg.perDayTimes && !cfg.defaultDate ? " Set a Default Start Date above to see real day-of-week dates here." : ""}</div>
+    </div>
+  );
+}
 
-  if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "POST required" });
+function TidDropdown({ value, onChange, history, bank, show, setShow, tidLabel, setTidLabel, labelPh, T }) {
+  return (
+    <div style={{ position: "relative" }}>
+      <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Template ID</label>
+      <div style={{ display: "flex", gap: 6 }}>
+        <input style={{ ...T.inp, flex: 1 }} placeholder="" value={value || ""} onChange={e => onChange(e.target.value)} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => { e.target.style.borderColor=T.border2; setTimeout(() => setShow(false), 150); }} />
+        <button onClick={() => setShow(d => !d)} style={{ background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "0 10px", color: T.textMid, cursor: "pointer", fontSize: 13 }}>▾</button>
+      </div>
+      {show && (
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 7, zIndex: 100, marginTop: 3, maxHeight: 280, overflowY: "auto" }}>
+          {(bank || []).map(t => (
+            <div key={t.id} onClick={() => { onChange(t.id); setShow(false); }} style={{ padding: "9px 12px", cursor: "pointer", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between" }} onMouseEnter={e => e.currentTarget.style.background=T.rowHover} onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+              <span style={{ fontSize: 12, color: T.text, fontWeight: 600 }}>{t.id}</span>
+              <span style={{ fontSize: 11, color: T.textDim }}>{t.name}</span>
+            </div>
+          ))}
+          {(history || []).filter(e => !(bank||[]).find(t => t.id === (typeof e==="string"?e:e.id))).map(entry => {
+            const tid = typeof entry==="string"?entry:entry.id;
+            const lbl = typeof entry==="string"?"":entry.label;
+            return (
+              <div key={tid} onClick={() => { onChange(tid); setShow(false); }} style={{ padding: "9px 12px", cursor: "pointer", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between" }} onMouseEnter={e => e.currentTarget.style.background=T.rowHover} onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                <span style={{ fontSize: 12, color: T.text, fontWeight: 600 }}>{tid}</span>
+                {lbl && <span style={{ fontSize: 11, color: T.textDim }}>{lbl}</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <input style={{ ...T.inp, marginTop: 4, fontSize: 10 }} placeholder={labelPh || "Label"} value={tidLabel || ""} onChange={e => setTidLabel(e.target.value)} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => e.target.style.borderColor=T.border2} />
+    </div>
+  );
+}
 
-  let ids;
-  try {
-    ids = req.body?.ids;
-  } catch {
-    return res.status(400).json({ error: "Invalid JSON body" });
-  }
-  if (!Array.isArray(ids) || ids.length === 0) {
-    return res.status(400).json({ error: "ids array required" });
-  }
-  // Cap batch size to avoid timeouts
-  const batch = ids.slice(0, 25).map(id => String(id).trim()).filter(Boolean);
+function CompanionConfig({ label, config, setConfig, tidHistory, showTid, setShowTid, tidLabel, setTidLabel, FN_TEMPLATE_BANK, T }) {
+  const fields = [
+    { key: "startTime",   lbl: "Start Time",    ph: "1:00pm" },
+    { key: "date",        lbl: "Override Date", ph: "", type: "date", hint: "Leave blank to use site Day 1 date" },
+    { key: "techType",    lbl: "Tech Type",     ph: "Tech" },
+    { key: "budgetTech",  lbl: "Budget $",      ph: "200" },
+    { key: "payRate",     lbl: "Pay Rate $",    ph: "150" },
+    { key: "approxHours", lbl: "Est. Hours",    ph: "3" },
+    { key: "country",     lbl: "Country",       ph: "US" },
+  ];
+  return (
+    <div style={{ marginTop: 10, background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1rem" }}>
+      <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>{label} Config</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <TidDropdown value={config.templateId} onChange={v => setConfig(p => ({...p, templateId: v}))} history={tidHistory} bank={FN_TEMPLATE_BANK} show={showTid} setShow={setShowTid} tidLabel={tidLabel} setTidLabel={setTidLabel} labelPh={"Label (e.g. PNC " + label + ")"} T={T} />
+        {fields.map(({ key, lbl, ph, type, hint }) => (
+          <FieldInput key={key} label={lbl} value={config[key]} onChange={e => setConfig(p => ({...p, [key]: e.target.value}))} ph={ph} type={type} hint={hint} T={T} />
+        ))}
+        <PayTypeToggle value={config.payType} onChange={v => setConfig(p => ({...p, payType: v}))} T={T} />
+      </div>
+    </div>
+  );
+}
 
-  const token = await getApiToken();
-  const sessionCookie = process.env.FN_SESSION_COOKIE;
+function CompanionToggle({ flag, setFlag, label, desc, children, T }) {
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ padding: "10px 14px", background: T.surface2, borderRadius: 7, border: `1px solid ${flag ? T.accent : T.border}`, display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setFlag(d => !d)}>
+        <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${flag ? T.accent : T.border2}`, background: flag ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          {flag && <span style={{ color: "#000", fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+        </div>
+        <div>
+          <div style={{ fontSize: 12, color: flag ? T.text : T.textMid, fontWeight: 600 }}>{label}</div>
+          <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>{desc}</div>
+        </div>
+      </div>
+      {flag && children}
+      <div style={{ height: 1 }} />
+    </div>
+  );
+}
 
-  let results, mode;
-  if (token) {
-    results = await Promise.all(batch.map(id => verifyViaApi(id, token)));
-    mode = "api";
-  } else if (sessionCookie) {
-    results = await Promise.all(batch.map(id => verifyViaSessionCookie(id, sessionCookie)));
-    mode = "cookie";
-  } else {
-    results = await Promise.all(batch.map(id => verifyViaPublicPage(id)));
-    mode = "page";
-  }
+export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DEFAULTS, ALL_WO_TYPES, WO_TYPES, woConfig, projectId, setProjectId, displayName, setDisplayName, projectIdHistory, showPidDropdown, setShowPidDropdown, displayNameHistory, showDnDropdown, setShowDnDropdown, woTemplates, setShowTemplatePanel, adminUnlocked, templateIdHistory, showTidDropdown, setShowTidDropdown, FN_TEMPLATE_BANK, saveTemplateId, includeDEL, setIncludeDEL, delConfig, setDelConfig, showDelTidDropdown, setShowDelTidDropdown, delTidLabelInput, setDelTidLabelInput, includeBRK, setIncludeBRK, brkConfig, setBrkConfig, showBrkTidDropdown, setShowBrkTidDropdown, brkTidLabelInput, setBrkTidLabelInput, includeWRK, setIncludeWRK, wrkConfig, setWrkConfig, showWrkTidDropdown, setShowWrkTidDropdown, wrkTidLabelInput, setWrkTidLabelInput, deletedBuiltins, setDeleteConfirm, setDeletePw, setDeletePwError, setEditingCustomKey, setCustomForm, setShowCustomModal, setShowRecoverModal, isPastDate, overriddenBuiltins }) {
+  return (
+    <div style={{ display: "grid", gap: 16 }}>
 
-  res.status(200).json({ results, mode });
+      <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
+        <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Project ID</label>
+        <div style={{ position: "relative" }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input style={{ ...T.inp, flex: 1 }} placeholder="e.g. 10035574 - 4569395 - PNC" value={projectId} onChange={e => { setProjectId(e.target.value); if (!displayName || displayName === projectId) setDisplayName(e.target.value); }} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => { e.target.style.borderColor=T.border2; setTimeout(() => setShowPidDropdown(false), 150); }} />
+            {projectIdHistory.length > 0 && <button onClick={() => setShowPidDropdown(d => !d)} style={{ background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "0 10px", color: T.textMid, cursor: "pointer", fontSize: 13 }}>▾</button>}
+          </div>
+          {showPidDropdown && projectIdHistory.length > 0 && (
+            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 7, zIndex: 100, marginTop: 3, maxHeight: 200, overflowY: "auto" }}>
+              {projectIdHistory.map(pid => (
+                <div key={pid} onClick={() => { setProjectId(pid); if (!displayName || displayName === projectId) setDisplayName(pid); setShowPidDropdown(false); }} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, color: T.textMid, borderBottom: `1px solid ${T.border}` }} onMouseEnter={e => e.currentTarget.style.background=T.rowHover} onMouseLeave={e => e.currentTarget.style.background="transparent"}>{pid}</div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <label style={{ display: "block", fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Location Display Name Prefix</label>
+          <div style={{ position: "relative" }}>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input style={{ ...T.inp, flex: 1 }} placeholder="Prefix used in FN location names" value={displayName} onChange={e => setDisplayName(e.target.value)} onFocus={e => e.target.style.borderColor=T.accent} onBlur={e => { e.target.style.borderColor=T.border2; setTimeout(() => setShowDnDropdown(false), 150); }} />
+              {(displayNameHistory||[]).length > 0 && <button onClick={() => setShowDnDropdown(d => !d)} style={{ background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "0 10px", color: T.textMid, cursor: "pointer", fontSize: 13 }}>▾</button>}
+            </div>
+            {showDnDropdown && (displayNameHistory||[]).length > 0 && (
+              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 7, zIndex: 100, marginTop: 3, maxHeight: 200, overflowY: "auto" }}>
+                {(displayNameHistory||[]).map(dn => (
+                  <div key={dn} onClick={() => { setDisplayName(dn); setShowDnDropdown(false); }} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, color: T.textMid, borderBottom: `1px solid ${T.border}` }} onMouseEnter={e => e.currentTarget.style.background=T.rowHover} onMouseLeave={e => e.currentTarget.style.background="transparent"}>{dn}</div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div style={{ fontSize: 10, color: "#6b7280", marginTop: 6 }}>Prefix used in FieldNation location names</div>
+        </div>
+      </div>
+
+      <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2 }}>Work Order Type</div>
+          {woTemplates.length > 0 && <button onClick={() => setShowTemplatePanel(true)} style={{ fontSize: 11, color: T.accent, background: "transparent", border: `1px solid ${T.accent}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit" }}>📋 Use Template</button>}
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <select value={woType} onChange={e => { const k=e.target.value; const wot=ALL_WO_TYPES[k]||{}; setWoType(k); setWoConfig(WO_DEFAULTS[k]?{...WO_DEFAULTS[k]}:{templateId:"",startTime:"",endTime:"",defaultDate:"",techType:"Tech",numTechs:wot.numTechs?.toString()||"1",numDays:wot.numDays?.toString()||"1",budgetTech:"",payRate:"",approxHours:"",country:"US",payType:"Fixed",perDayTimes:false,startTimes:["","","","","","",""],checkInWindow:false,endTimes:["","","","","","",""]}); }} style={{ flex:1, ...T.inp, fontSize:14, height:42, fontFamily:"inherit" }}>
+            {Object.entries(ALL_WO_TYPES).map(([key,wot]) => (
+              <option key={key} value={key}>{key} — {(wot.label||key).replace(/^[A-Z]+ — /,"")}</option>
+            ))}
+          </select>
+          {adminUnlocked && woType && (
+            <div style={{ display:"flex", gap:4 }}>
+              <button onClick={() => { setEditingCustomKey(woType); const wot=ALL_WO_TYPES[woType]||{}; setCustomForm({key:woType,label:wot.label||"",siteIdSuffix:wot.siteIdSuffix||woType,numTechs:wot.numTechs?.toString()||"1",numDays:wot.numDays?.toString()||"1",useBundle:!!wot.useBundle}); setShowCustomModal(true); }} style={{ background:"transparent", border:`1px solid ${T.border2}`, borderRadius:7, padding:"0 12px", color:T.textDim, cursor:"pointer", fontSize:11, height:42 }}>edit</button>
+              <button onClick={() => { setDeletePw(""); setDeletePwError(false); setDeleteConfirm({key:woType,isBuiltin:!!WO_TYPES[woType]}); }} style={{ background:"transparent", border:"1px solid #ef4444", borderRadius:7, padding:"0 12px", color:"#ef4444", cursor:"pointer", fontSize:11, height:42 }}>delete</button>
+            </div>
+          )}
+        </div>
+        {woType && (() => { const wot=ALL_WO_TYPES[woType]||{}; if (woType==="SDT") return <div style={{ fontSize:11, color:T.textFaint, marginTop:6 }}>9 work orders × 3 days (fixed schedule, bundled AH/BH)</div>; return <div style={{ fontSize:11, color:T.textFaint, marginTop:6 }}>{wot.numTechs} tech{wot.numTechs>1?"s":""} × {wot.numDays} day{wot.numDays>1?"s":""}</div>; })()}
+        {adminUnlocked && <button onClick={() => { setEditingCustomKey(null); setCustomForm({key:"",label:"",siteIdSuffix:"",numTechs:"1",numDays:"1",useBundle:false}); setShowCustomModal(true); }} style={{ marginTop:8, width:"100%", background:"transparent", border:`1px dashed ${T.border2}`, borderRadius:10, padding:"10px", color:T.textDim, cursor:"pointer", fontSize:12, fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }} onMouseEnter={e=>e.currentTarget.style.borderColor=T.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=T.border2}><span style={{fontSize:16}}>＋</span> Add Custom WO Type</button>}
+        {adminUnlocked && Object.keys(deletedBuiltins||{}).length>0 && <button onClick={()=>setShowRecoverModal(true)} style={{ marginTop:6, width:"100%", background:"transparent", border:"1px dashed #22c55e", borderRadius:10, padding:"8px", color:"#22c55e", cursor:"pointer", fontSize:12, fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>↩ Recover Deleted ({Object.keys(deletedBuiltins||{}).length})</button>}
+      </div>
+
+      {woType && woType !== "SDT" && (
+        <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
+          <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>Work Order Config</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <TidDropdown value={woConfig.templateId} onChange={v=>setWoConfig(p=>({...p,templateId:v}))} history={templateIdHistory[woType]} bank={FN_TEMPLATE_BANK} show={showTidDropdown} setShow={setShowTidDropdown} tidLabel="" setTidLabel={()=>{}} labelPh="Label" T={T} />
+            {[
+              {key:"startTime",lbl:"Start Time",ph:"1:00pm"},
+              {key:"defaultDate",lbl:"Default Start Date",ph:"",type:"date"},
+              {key:"techType",lbl:"Tech Type",ph:"Tech"},
+              {key:"numTechs",lbl:"Techs per Site",ph:"1"},
+              {key:"numDays",lbl:"Days per Site",ph:"1"},
+              {key:"budgetTech",lbl:"Budget $",ph:""},
+              {key:"payRate",lbl:"Pay Rate $",ph:""},
+              {key:"approxHours",lbl:"Est. Hours",ph:"3"},
+              {key:"country",lbl:"Country",ph:"US"},
+            ].map(({key,lbl,ph,type}) => (
+              <FieldInput key={key} label={lbl} value={woConfig[key]} onChange={e=>setWoConfig(p=>({...p,[key]:e.target.value}))} ph={ph} type={type} T={T} />
+            ))}
+            <PayTypeToggle value={woConfig.payType} onChange={v=>setWoConfig(p=>({...p,payType:v}))} T={T} />
+            <ScheduleConfig cfg={woConfig} setConfig={setWoConfig} T={T} />
+          </div>
+          <div style={{ marginTop:12, padding:"8px 12px", background:T.surface2, borderRadius:7, fontSize:11, color:T.textFaint }}>
+            Pattern: <span style={{color:T.textMid}}>{woConfig.numTechs} tech{Number(woConfig.numTechs)>1?"s":""} × {woConfig.numDays} day{Number(woConfig.numDays)>1?"s":""}</span> · Template: <span style={{color:T.textMid}}>{woConfig.templateId||"—"}</span>
+          </div>
+        </div>
+      )}
+
+      {woType === "SDT" && (
+        <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
+          <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>Work Order Config — SDT</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <TidDropdown value={woConfig.templateId} onChange={v=>setWoConfig(p=>({...p,templateId:v}))} history={templateIdHistory[woType]} bank={FN_TEMPLATE_BANK} show={showTidDropdown} setShow={setShowTidDropdown} tidLabel="" setTidLabel={()=>{}} labelPh="Label" T={T} />
+            <FieldInput label="Default Start Date" value={woConfig.defaultDate} onChange={e=>setWoConfig(p=>({...p,defaultDate:e.target.value}))} ph="" type="date" T={T} />
+            <FieldInput label="Tech Type" value={woConfig.techType} onChange={e=>setWoConfig(p=>({...p,techType:e.target.value}))} ph="Tech" T={T} />
+            <FieldInput label="Country" value={woConfig.country} onChange={e=>setWoConfig(p=>({...p,country:e.target.value}))} ph="US" T={T} />
+          </div>
+          <div style={{ marginTop: 12, padding: "10px 12px", background: T.surface2, borderRadius: 7, fontSize: 11, color: T.textFaint, lineHeight: 1.7 }}>
+            SDT generates a fixed <span style={{color:T.textMid}}>9-row, 3-day schedule</span> per site (1 AH on Day 1, then 2 BH + 2 AH on Days 2 and 3), bundled separately by AH/BH group. Site IDs follow <span style={{color:T.textMid}}>xxxx-SDT-AH(#)</span> / <span style={{color:T.textMid}}>xxxx-SDT-BH(#)</span>. Pay is Fixed per row ($450–$650) and isn't configurable here.
+          </div>
+        </div>
+      )}
+
+      <div style={{ background: T.surface, borderRadius: 12, padding: "1.5rem", border: `1px solid ${T.border}` }}>
+        <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Companion Work Orders</div>
+        <CompanionToggle flag={includeWRK} setFlag={setIncludeWRK} label="Also generate WRK (Walk In Ready Kit) on Day 1" desc="1 WRK WO per site · configure below" T={T}>
+          <CompanionConfig label="WRK" config={wrkConfig} setConfig={setWrkConfig} tidHistory={[]} showTid={showWrkTidDropdown} setShowTid={setShowWrkTidDropdown} tidLabel={wrkTidLabelInput} setTidLabel={setWrkTidLabelInput} FN_TEMPLATE_BANK={FN_TEMPLATE_BANK} T={T} />
+        </CompanionToggle>
+        <CompanionToggle flag={includeBRK} setFlag={setIncludeBRK} label="Also generate BRK (Backboard) on Day 1" desc="1 BRK WO per site · configure below" T={T}>
+          <CompanionConfig label="BRK" config={brkConfig} setConfig={setBrkConfig} tidHistory={[]} showTid={showBrkTidDropdown} setShowTid={setShowBrkTidDropdown} tidLabel={brkTidLabelInput} setTidLabel={setBrkTidLabelInput} FN_TEMPLATE_BANK={FN_TEMPLATE_BANK} T={T} />
+        </CompanionToggle>
+        <CompanionToggle flag={includeDEL} setFlag={setIncludeDEL} label="Also generate DEL (Delivery) on Day 1" desc="1 DEL WO per site · configure below" T={T}>
+          <CompanionConfig label="DEL" config={delConfig} setConfig={setDelConfig} tidHistory={[]} showTid={showDelTidDropdown} setShowTid={setShowDelTidDropdown} tidLabel={delTidLabelInput} setTidLabel={setDelTidLabelInput} FN_TEMPLATE_BANK={FN_TEMPLATE_BANK} T={T} />
+        </CompanionToggle>
+      </div>
+
+    </div>
+  );
 }
