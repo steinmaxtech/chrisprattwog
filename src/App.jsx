@@ -2143,6 +2143,9 @@ export default function App() {
                                     ref={el => inputRefs.current[`${rowIdx}-${colIdx}`] = el}
                                     type={col.type || "text"}
                                     value={site[col.key]}
+                                    onChange={e => updateSite(rowIdx, col.key, e.target.value)}
+                                    onFocus={() => setActiveCell({ row: rowIdx, col: colIdx })}
+                                    onKeyDown={e => handleKeyDown(e, rowIdx, colIdx)}
                                     placeholder={col.key === 'numTechs' ? (woConfig.numTechs || col.ph) : col.key === 'numDays' ? (woConfig.numDays || col.ph) : col.key === 'date' ? (woConfig.defaultDate || col.ph) : col.key === 'budgetTech' ? (woConfig.budgetTech || col.ph) : col.key === 'payRate' ? (woConfig.payRate || col.ph) : col.ph}
                                     style={{ width: "100%", background: col.key === 'date' && isPastDate(site[col.key] || (col.key === 'date' ? woConfig.defaultDate : '')) ? 'rgba(239,68,68,0.15)' : "transparent", border: "none", borderColor: col.key === 'date' && isPastDate(site[col.key] || (col.key === 'date' ? woConfig.defaultDate : '')) ? '#ef4444' : undefined, padding: "6px 8px", color: T.text, fontSize: 12, fontFamily: "inherit", outline: cellActive ? "2px solid #e97316" : "none", outlineOffset: "-1px", borderRadius: 3 }}
                                   />
