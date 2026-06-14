@@ -1135,7 +1135,7 @@ export default function App() {
     setGridMode(false); setPasteMode(false); setPasteText(""); setGridRows([]); setGridMapping([]);
   };
 
-
+  const parsePaste = () => {
     setPasteError("");
     if (!pasteText.trim()) { setPasteError("Nothing pasted yet."); return; }
 
