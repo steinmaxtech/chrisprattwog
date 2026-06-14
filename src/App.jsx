@@ -1816,7 +1816,7 @@ export default function App() {
               <div>
                 <div style={{ display: "inline-flex", borderRadius: 8, border: `1px solid ${T.border2}`, overflow: "hidden", marginBottom: 10 }}>
                   <button style={{ padding: "5px 14px", border: "none", background: T.accent, color: "#000", fontWeight: 700, fontSize: 11, fontFamily: "inherit", cursor: "default" }}>Text</button>
-                  <button onClick={enterGridMode} style={{ padding: "5px 14px", border: "none", borderLeft: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, fontSize: 11, fontFamily: "inherit", cursor: "pointer" }}>📊 Grid</button>
+                  <button onClick={() => { if (pasteText.trim()) enterGridMode(); else { setGridRows([]); setGridMapping([]); setPasteError(""); setGridMode(true); } }} style={{ padding: "5px 14px", border: "none", borderLeft: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, fontSize: 11, fontFamily: "inherit", cursor: "pointer" }}>📊 Grid</button>
                 </div>
                 {adminUnlocked && customParsers.length > 0 && (
                   <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -1950,9 +1950,27 @@ export default function App() {
                   <button style={{ padding: "5px 14px", border: "none", borderLeft: `1px solid ${T.border2}`, background: T.accent, color: "#000", fontWeight: 700, fontSize: 11, fontFamily: "inherit", cursor: "default" }}>📊 Grid</button>
                 </div>
                 <p style={{ color: T.textDim, fontSize: 12, marginBottom: 10, lineHeight: 1.6 }}>
-                  Check that your data lines up correctly, fix any cells, then map each column to a field below. Use ✨ AI Suggest to auto-fill the mapping.
+                  {gridRows.length === 0
+                    ? "Paste your data below, then click Parse to load it into the grid."
+                    : "Check that your data lines up correctly, fix any cells, then map each column to a field below. Use ✨ AI Suggest to auto-fill the mapping."}
                 </p>
                 {pasteError && <div style={{ color: "#f87171", fontSize: 11, marginBottom: 8 }}>⚠ {pasteError}</div>}
+                {gridRows.length === 0 ? (
+                  <div>
+                    <textarea
+                      value={pasteText}
+                      onChange={e => setPasteText(e.target.value)}
+                      placeholder={"Paste tab- or comma-separated rows here..."}
+                      style={{ width: "100%", background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "10px 13px", color: T.text, fontSize: 11, fontFamily: "inherit", height: 180, resize: "vertical", lineHeight: 1.6 }}
+                    />
+                    <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                      <button onClick={enterGridMode} style={{ background: `linear-gradient(135deg,${T.accent},#dc6209)`, border: "none", borderRadius: 6, padding: "8px 20px", color: "#000", cursor: "pointer", fontSize: 12, fontFamily: "'Bebas Neue',sans-serif", letterSpacing: 1.5 }}>
+                        PARSE INTO GRID →
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                <div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
                   <button disabled={gridAiLoading} onClick={aiSuggestGridMapping} style={{ padding: "8px 18px", borderRadius: 6, border: "none", background: gridAiLoading ? T.disabledBg : "linear-gradient(135deg,#7c3aed,#5b21b6)", color: gridAiLoading ? T.disabledText : "#fff", cursor: gridAiLoading ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5 }}>
                     {gridAiLoading ? "⏳ Analyzing..." : "✨ AI Suggest Mapping"}
@@ -1961,6 +1979,9 @@ export default function App() {
                     <input type="checkbox" checked={gridHasHeader} onChange={e => setGridHasHeader(e.target.checked)} />
                     First row is a header (skip when importing)
                   </label>
+                  <button onClick={() => { setGridRows([]); setGridMapping([]); setPasteError(""); }} style={{ padding: "8px 14px", borderRadius: 6, border: `1px solid ${T.border2}`, background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 11, fontFamily: "inherit", marginLeft: "auto" }}>
+                    ← New paste
+                  </button>
                 </div>
                 <div style={{ overflowX: "auto", border: `1px solid ${T.border2}`, borderRadius: 8, maxHeight: 360, overflowY: "auto" }}>
                   <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 11 }}>
@@ -1999,6 +2020,8 @@ export default function App() {
                     IMPORT {gridHasHeader ? Math.max(0, gridRows.length - 1) : gridRows.length} ROWS →
                   </button>
                 </div>
+                </div>
+                )}
               </div>
             ) : (
               <div>
