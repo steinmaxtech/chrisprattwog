@@ -1153,6 +1153,19 @@ export default function App() {
     setGridRows(prev => prev.map((row, ri) => ri === r ? row.map((cell, ci) => ci === c ? val : cell) : row));
   };
 
+  const addGridRow = (afterIdx) => {
+    setGridRows(prev => {
+      const blank = Array(STANDARD_KEYS.length).fill("");
+      const next = [...prev];
+      next.splice(afterIdx + 1, 0, blank);
+      return next;
+    });
+  };
+
+  const deleteGridRow = (idx) => {
+    setGridRows(prev => prev.length > 1 ? prev.filter((_, ri) => ri !== idx) : prev);
+  };
+
   // Build sites from the current grid + column mapping and add them to the table
   const importFromGrid = () => {
     setPasteError("");
@@ -2027,6 +2040,7 @@ export default function App() {
                   <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 11 }}>
                     <thead>
                       <tr>
+                        <th style={{ position: "sticky", top: 0, left: 0, background: T.surface2, padding: "6px 4px", borderBottom: `2px solid ${T.border2}`, borderRight: `1px solid ${T.border}`, width: 50, zIndex: 1 }}></th>
                         {gridMapping.map((m, ci) => (
                           <th key={ci} style={{ position: "sticky", top: 0, background: T.surface2, padding: "6px 4px", borderBottom: `2px solid ${T.border2}`, borderRight: `1px solid ${T.border}`, minWidth: 110 }}>
                             <select value={m} onChange={e => setGridMapping(prev => prev.map((v, i) => i === ci ? e.target.value : v))} style={{ width: "100%", background: `${T.accent}22`, color: T.accentHi, border: `1px solid ${T.accent}`, borderRadius: 5, padding: "3px 4px", fontSize: 10, fontFamily: "inherit" }}>
@@ -2039,6 +2053,10 @@ export default function App() {
                     <tbody>
                       {gridRows.map((row, ri) => (
                         <tr key={ri} style={{ background: gridHasHeader && ri === 0 ? T.surface2 : "transparent", opacity: gridHasHeader && ri === 0 ? 0.5 : 1 }}>
+                          <td style={{ borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, padding: "2px 4px", whiteSpace: "nowrap", background: T.surface2 }}>
+                            <button title="Add row below" onClick={() => addGridRow(ri)} style={{ background: "transparent", border: "none", color: T.textFaint, cursor: "pointer", fontSize: 13, padding: "0 3px", lineHeight: 1 }}>＋</button>
+                            <button title="Delete row" disabled={gridRows.length <= 1} onClick={() => deleteGridRow(ri)} style={{ background: "transparent", border: "none", color: gridRows.length <= 1 ? T.border2 : "#ef4444", cursor: gridRows.length <= 1 ? "not-allowed" : "pointer", fontSize: 13, padding: "0 3px", lineHeight: 1 }}>×</button>
+                          </td>
                           {row.map((cell, ci) => (
                             <td key={ci} style={{ borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, padding: 0 }}>
                               <input
@@ -2058,6 +2076,9 @@ export default function App() {
                 <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                   <button onClick={importFromGrid} style={{ background: `linear-gradient(135deg,${T.accent},#dc6209)`, border: "none", borderRadius: 6, padding: "8px 20px", color: "#000", cursor: "pointer", fontSize: 12, fontFamily: "'Bebas Neue',sans-serif", letterSpacing: 1.5 }}>
                     IMPORT {gridHasHeader ? Math.max(0, gridRows.length - 1) : gridRows.length} ROWS →
+                  </button>
+                  <button onClick={() => addGridRow(gridRows.length - 1)} style={{ padding: "8px 16px", borderRadius: 6, border: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
+                    ＋ Add Row
                   </button>
                 </div>
                 </div>
