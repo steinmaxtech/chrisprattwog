@@ -1024,8 +1024,11 @@ export default function App() {
   };
 
   // ---- Spreadsheet-style grid preview helpers ----
+  // The grid always has these 8 columns, in this order — the same fields the
+  // importer needs regardless of input format. Parsing fills in what it can;
+  // anything it can't figure out is left blank for manual fill-in/adjustment.
+  const STANDARD_KEYS = ["code","branch","address","address2","city","state","zip","date"];
   const GRID_FIELD_OPTIONS = [
-    { value: "ignore", label: "Ignore" },
     { value: "code", label: "Site Code" },
     { value: "branch", label: "Branch Name" },
     { value: "address", label: "Address" },
@@ -1034,7 +1037,6 @@ export default function App() {
     { value: "state", label: "State" },
     { value: "zip", label: "Zip" },
     { value: "date", label: "Date" },
-    { value: "fulladdr", label: "Full Address (auto-split)" },
   ];
 
   const gridParseDate = (r) => {
@@ -1054,22 +1056,96 @@ export default function App() {
     return { address, city, state, zip };
   };
 
-  // Parse pasteText into a grid of cells (tab or comma delimited) for preview/editing
-  const enterGridMode = () => {
+  // Parse pasteText into the fixed 8-column standard grid for preview/editing.
+  // Best-effort fill via detected delimiter + AI column mapping; anything
+  // unresolved is left blank for the user to fill in/adjust directly.
+  const enterGridMode = async () => {
     setPasteError("");
     if (!pasteText.trim()) { setPasteError("Paste your data first."); return; }
     const rawLines = pasteText.trim().split("\n").filter(l => l.trim());
-    const delim = rawLines[0].includes("\t") ? "\t" : (rawLines[0].includes(",") ? "," : null);
-    if (!delim) { setPasteError("Couldn't detect columns (no tabs or commas found) — try ✨ AI Parse instead."); return; }
-    const rows = rawLines.map(l => l.split(delim).map(c => c.replace(/^"|"$/g, "").trim()));
-    const maxCols = Math.max(...rows.map(r => r.length));
-    const padded = rows.map(r => { const arr = [...r]; while (arr.length < maxCols) arr.push(""); return arr; });
     const HEADER_WORDS = ["code","name","address","city","state","zip","branch","building","date","site","location"];
-    const first = padded[0].map(h => h.toLowerCase().trim());
-    const looksHeader = first.some(h => HEADER_WORDS.includes(h));
-    setGridRows(padded);
-    setGridMapping(Array(maxCols).fill("ignore"));
-    setGridHasHeader(looksHeader);
+    const get = (cols, idx) => { const n = parseInt(idx); return (!isNaN(n) && n >= 0 && n < cols.length) ? (cols[n] || "") : ""; };
+
+    // Detect a tabular delimiter for raw columns
+    let rawRows = null;
+    let splitFn = null;
+    if (rawLines[0].includes("\t")) splitFn = l => l.split("\t");
+    else if (rawLines[0].includes(",")) splitFn = l => l.split(",");
+    else if (/\s{2,}/.test(rawLines[0])) splitFn = l => l.split(/\s{2,}/);
+    if (splitFn) {
+      const rows = rawLines.map(l => splitFn(l).map(c => c.replace(/^"|"$/g, "").trim()));
+      const maxCols = Math.max(...rows.map(r => r.length));
+      rawRows = rows.map(r => { const arr = [...r]; while (arr.length < maxCols) arr.push(""); return arr; });
+    }
+
+    // Ask AI for a column/role mapping to best-fill the standard grid (best-effort; ignore failures)
+    let aiMap = null;
+    setGridAiLoading(true);
+    try {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-cpwog-secret": import.meta.env.VITE_AI_SECRET || "" },
+        body: JSON.stringify({ sampleData: pasteText.trim().slice(0, 3000) })
+      });
+      if (res.ok) aiMap = await res.json();
+    } catch (e) { /* best-effort only */ }
+    setGridAiLoading(false);
+
+    let gridData = [];
+    let hasHeader = false;
+
+    if (aiMap && aiMap.layout === "blocks" && Number(aiMap.blockSize) > 0 && Array.isArray(aiMap.blockRoles)) {
+      // Multi-line block format: each site spans multiple consecutive lines
+      const size = Number(aiMap.blockSize);
+      for (let i = 0; i + size - 1 < rawLines.length; i += size) {
+        const rec = { code: "", branch: "", address: "", address2: "", city: "", state: "", zip: "", date: "" };
+        for (let j = 0; j < size; j++) {
+          const role = (aiMap.blockRoles[j] || "").toLowerCase();
+          const line = (rawLines[i + j] || "").trim();
+          if (role === "code") rec.code = line;
+          else if (role.includes("branch")) rec.branch = line;
+          else if (role === "date") rec.date = line;
+          else if (role.includes("address2") || role.includes("suite") || role.includes("unit")) rec.address2 = line;
+          else if (role.includes("address")) { const a = gridSplitAddrCsv(line); rec.address = a.address; rec.city = a.city; rec.state = a.state; rec.zip = a.zip; }
+        }
+        gridData.push(STANDARD_KEYS.map(k => rec[k]));
+      }
+    } else if (rawRows) {
+      const first = rawRows[0].map(h => h.toLowerCase().trim());
+      hasHeader = first.some(h => HEADER_WORDS.includes(h));
+      gridData = rawRows.map(cols => {
+        const rec = { code: "", branch: "", address: "", address2: "", city: "", state: "", zip: "", date: "" };
+        if (aiMap) {
+          rec.code = get(cols, aiMap.colCode);
+          rec.branch = get(cols, aiMap.colBranch);
+          rec.address2 = get(cols, aiMap.colAddr2);
+          rec.date = get(cols, aiMap.colDate);
+          if (aiMap.colFullAddr !== "" && aiMap.colFullAddr !== undefined) {
+            const a = gridSplitAddrCsv(get(cols, aiMap.colFullAddr));
+            rec.address = a.address; rec.city = a.city; rec.state = a.state; rec.zip = a.zip;
+          } else {
+            rec.address = get(cols, aiMap.colAddr);
+            rec.city = get(cols, aiMap.colCity);
+            rec.state = get(cols, aiMap.colState);
+            rec.zip = get(cols, aiMap.colZip);
+          }
+        }
+        // If AI gave nothing usable for this row, fall back to positional defaults
+        if (!rec.code && !rec.address && !rec.branch) {
+          rec.code = cols[0] || ""; rec.branch = cols[1] || "";
+          rec.address = cols[2] || ""; rec.city = cols[3] || ""; rec.state = cols[4] || ""; rec.zip = cols[5] || "";
+        }
+        return STANDARD_KEYS.map(k => rec[k]);
+      });
+    } else {
+      // No delimiter and no block layout detected — put each whole line into Address
+      gridData = rawLines.map(l => { const arr = Array(STANDARD_KEYS.length).fill(""); arr[STANDARD_KEYS.indexOf("address")] = l.trim(); return arr; });
+      setPasteError("Couldn't auto-detect column structure — pasted each line into the Address column. Edit cells to split out Site Code, City, State, Zip, etc.");
+    }
+
+    setGridRows(gridData);
+    setGridMapping([...STANDARD_KEYS]);
+    setGridHasHeader(hasHeader);
     setGridMode(true);
   };
 
@@ -1077,60 +1153,27 @@ export default function App() {
     setGridRows(prev => prev.map((row, ri) => ri === r ? row.map((cell, ci) => ci === c ? val : cell) : row));
   };
 
-  // Ask AI to suggest which grid columns map to which fields
-  const aiSuggestGridMapping = async () => {
-    setGridAiLoading(true);
-    setPasteError("");
-    try {
-      const res = await fetch("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-cpwog-secret": import.meta.env.VITE_AI_SECRET || "" },
-        body: JSON.stringify({ sampleData: pasteText.trim().slice(0, 3000) })
-      });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || e.detail || `Server error ${res.status}`); }
-      const p = await res.json();
-      const mapping = Array(gridRows[0]?.length || 0).fill("ignore");
-      const setIf = (idx, val) => { const n = parseInt(idx); if (!isNaN(n) && n >= 0 && n < mapping.length) mapping[n] = val; };
-      if (p.colFullAddr !== "" && p.colFullAddr !== undefined) setIf(p.colFullAddr, "fulladdr");
-      setIf(p.colCode, "code");
-      setIf(p.colBranch, "branch");
-      setIf(p.colAddr, "address");
-      setIf(p.colAddr2, "address2");
-      setIf(p.colCity, "city");
-      setIf(p.colState, "state");
-      setIf(p.colZip, "zip");
-      setIf(p.colDate, "date");
-      setGridMapping(mapping);
-    } catch (e) {
-      setPasteError(e.message.includes("overloaded") ? "✨ Anthropic is busy — wait a few seconds and try again" : "✨ AI suggest failed: " + e.message);
-    }
-    setGridAiLoading(false);
-  };
-
-  // Build sites from the current grid + mapping and add them to the table
+  // Build sites from the current grid + column mapping and add them to the table
   const importFromGrid = () => {
     setPasteError("");
     const dataRows = gridHasHeader ? gridRows.slice(1) : gridRows;
     if (!dataRows.length) { setPasteError("No data rows to import."); return; }
     const colIdx = (field) => gridMapping.findIndex(m => m === field);
     const iCode = colIdx("code"), iBranch = colIdx("branch"), iAddr = colIdx("address"), iAddr2 = colIdx("address2"),
-          iCity = colIdx("city"), iState = colIdx("state"), iZip = colIdx("zip"), iDate = colIdx("date"), iFull = colIdx("fulladdr");
+          iCity = colIdx("city"), iState = colIdx("state"), iZip = colIdx("zip"), iDate = colIdx("date");
     const siteDefaults = { numTechs: woConfig.numTechs || "1", numDays: woConfig.numDays || "1", verified: null, verifying: false, verifyError: "" };
-    const parsed = dataRows.map(cols => {
-      const base = {
-        code: iCode >= 0 ? (cols[iCode] || "") : "",
-        branchName: iBranch >= 0 ? (cols[iBranch] || "") : "",
-        address2: iAddr2 >= 0 ? (cols[iAddr2] || "") : "",
-        date: iDate >= 0 ? gridParseDate(cols[iDate]) : (woConfig.defaultDate || ""),
-        ...siteDefaults
-      };
-      if (iFull >= 0) {
-        const a = gridSplitAddrCsv(cols[iFull]);
-        return { ...base, ...a };
-      }
-      return { ...base, address: iAddr >= 0 ? (cols[iAddr] || "") : "", city: iCity >= 0 ? (cols[iCity] || "") : "", state: iState >= 0 ? (cols[iState] || "") : "", zip: iZip >= 0 ? (cols[iZip] || "") : "" };
-    }).filter(r => r.code || r.address);
-    if (parsed.length === 0) { setPasteError("No rows matched — make sure at least Site Code or Address is mapped to a column."); return; }
+    const parsed = dataRows.map(cols => ({
+      code: iCode >= 0 ? (cols[iCode] || "") : "",
+      branchName: iBranch >= 0 ? (cols[iBranch] || "") : "",
+      address: iAddr >= 0 ? (cols[iAddr] || "") : "",
+      address2: iAddr2 >= 0 ? (cols[iAddr2] || "") : "",
+      city: iCity >= 0 ? (cols[iCity] || "") : "",
+      state: iState >= 0 ? (cols[iState] || "") : "",
+      zip: iZip >= 0 ? (cols[iZip] || "") : "",
+      date: iDate >= 0 ? gridParseDate(cols[iDate]) : (woConfig.defaultDate || ""),
+      ...siteDefaults
+    })).filter(r => r.code || r.address);
+    if (parsed.length === 0) { setPasteError("No rows matched — make sure at least Site Code or Address has a value."); return; }
     setSites(prev => { const ex = prev.filter(s => s.code || s.address || s.branchName); return ex.length > 0 ? [...ex, ...parsed] : parsed; });
     setGridMode(false); setPasteMode(false); setPasteText(""); setGridRows([]); setGridMapping([]);
   };
@@ -1951,8 +1994,8 @@ export default function App() {
                 </div>
                 <p style={{ color: T.textDim, fontSize: 12, marginBottom: 10, lineHeight: 1.6 }}>
                   {gridRows.length === 0
-                    ? "Paste your data below, then click Parse to load it into the grid."
-                    : "Check that your data lines up correctly, fix any cells, then map each column to a field below. Use ✨ AI Suggest to auto-fill the mapping."}
+                    ? "Paste your data below, then click Parse — it'll lay out Site Code, Branch, Address, City, State, Zip, and Date columns and fill in what it can."
+                    : "Every field is shown below, pre-filled where possible. Edit any cell to fix or fill in values, and use the column headers to relabel a column if needed."}
                 </p>
                 {pasteError && <div style={{ color: "#f87171", fontSize: 11, marginBottom: 8 }}>⚠ {pasteError}</div>}
                 {gridRows.length === 0 ? (
@@ -1964,17 +2007,14 @@ export default function App() {
                       style={{ width: "100%", background: T.surface2, border: `1px solid ${T.border2}`, borderRadius: 7, padding: "10px 13px", color: T.text, fontSize: 11, fontFamily: "inherit", height: 180, resize: "vertical", lineHeight: 1.6 }}
                     />
                     <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                      <button onClick={enterGridMode} style={{ background: `linear-gradient(135deg,${T.accent},#dc6209)`, border: "none", borderRadius: 6, padding: "8px 20px", color: "#000", cursor: "pointer", fontSize: 12, fontFamily: "'Bebas Neue',sans-serif", letterSpacing: 1.5 }}>
-                        PARSE INTO GRID →
+                      <button disabled={gridAiLoading} onClick={enterGridMode} style={{ background: gridAiLoading ? T.disabledBg : `linear-gradient(135deg,${T.accent},#dc6209)`, border: "none", borderRadius: 6, padding: "8px 20px", color: gridAiLoading ? T.disabledText : "#000", cursor: gridAiLoading ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "'Bebas Neue',sans-serif", letterSpacing: 1.5 }}>
+                        {gridAiLoading ? "⏳ ANALYZING..." : "PARSE INTO GRID →"}
                       </button>
                     </div>
                   </div>
                 ) : (
                 <div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-                  <button disabled={gridAiLoading} onClick={aiSuggestGridMapping} style={{ padding: "8px 18px", borderRadius: 6, border: "none", background: gridAiLoading ? T.disabledBg : "linear-gradient(135deg,#7c3aed,#5b21b6)", color: gridAiLoading ? T.disabledText : "#fff", cursor: gridAiLoading ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5 }}>
-                    {gridAiLoading ? "⏳ Analyzing..." : "✨ AI Suggest Mapping"}
-                  </button>
                   <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: T.textMid, cursor: "pointer" }}>
                     <input type="checkbox" checked={gridHasHeader} onChange={e => setGridHasHeader(e.target.checked)} />
                     First row is a header (skip when importing)
@@ -1989,7 +2029,7 @@ export default function App() {
                       <tr>
                         {gridMapping.map((m, ci) => (
                           <th key={ci} style={{ position: "sticky", top: 0, background: T.surface2, padding: "6px 4px", borderBottom: `2px solid ${T.border2}`, borderRight: `1px solid ${T.border}`, minWidth: 110 }}>
-                            <select value={m} onChange={e => setGridMapping(prev => prev.map((v, i) => i === ci ? e.target.value : v))} style={{ width: "100%", background: m !== "ignore" ? `${T.accent}22` : T.surface, color: m !== "ignore" ? T.accentHi : T.textDim, border: `1px solid ${m !== "ignore" ? T.accent : T.border2}`, borderRadius: 5, padding: "3px 4px", fontSize: 10, fontFamily: "inherit" }}>
+                            <select value={m} onChange={e => setGridMapping(prev => prev.map((v, i) => i === ci ? e.target.value : v))} style={{ width: "100%", background: `${T.accent}22`, color: T.accentHi, border: `1px solid ${T.accent}`, borderRadius: 5, padding: "3px 4px", fontSize: 10, fontFamily: "inherit" }}>
                               {GRID_FIELD_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                             </select>
                           </th>
