@@ -2282,6 +2282,37 @@ export default function App() {
                   </div>
                 );
               })()}
+              {(() => {
+                const timeOverrides = sites.filter(s => rowComplete(s) && ((s.startTimes || []).some(Boolean) || (s.hours || []).some(v => v !== "" && v !== undefined)));
+                if (!timeOverrides.length) return null;
+                return (
+                  <div style={{ padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 10, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 6 }}>Per-site time / hours overrides</div>
+                    {timeOverrides.map((s, i) => {
+                      const numDays = Math.max(1, Math.min(7, Number(s.numDays || woConfig.numDays) || 1));
+                      const days = Array.from({ length: numDays }, (_, d) => d).filter(d => (s.startTimes || [])[d] || ((s.hours || [])[d] !== "" && (s.hours || [])[d] !== undefined));
+                      return (
+                        <div key={i} style={{ fontSize: 11, color: T.textDim, lineHeight: 1.8, paddingBottom: 4 }}>
+                          <div style={{ color: T.textMid, fontWeight: 600 }}>↳ {s.code}</div>
+                          {days.map(d => {
+                            const t = (s.startTimes || [])[d];
+                            const h = (s.hours || [])[d];
+                            return (
+                              <div key={d} style={{ display: "flex", justifyContent: "space-between", paddingLeft: 12 }}>
+                                <span style={{ color: T.textFaint }}>{dayLabel(s.date, d)}</span>
+                                <span style={{ display: "flex", gap: 8 }}>
+                                  {t ? <span>Start <span style={{ color: T.accent }}>{t}</span></span> : null}
+                                  {(h !== "" && h !== undefined) ? <span>Hours <span style={{ color: T.accent }}>{h}</span></span> : null}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, paddingTop: 8 }}>
                 <span style={{ color: T.textDim }}>Total data rows</span>
 <span style={{ color: T.text, fontWeight: 600 }}>{totalRows}{delRows > 0 ? ` + ${delRows} DEL` : ""}{brkRows > 0 ? ` + ${brkRows} BRK` : ""}{wrkRows > 0 ? ` + ${wrkRows} WRK` : ""}</span>
@@ -2314,6 +2345,9 @@ export default function App() {
                     <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>Start: {s.date}</div>
                     {(s.budgetTech || s.payRate) && (
                       <div style={{ fontSize: 10, color: T.accent, marginTop: 2 }}>⚡ {s.budgetTech ? `$${s.budgetTech}` : `$${woConfig.budgetTech}`} / {s.payRate ? `$${s.payRate}` : `$${woConfig.payRate}`}</div>
+                    )}
+                    {((s.startTimes || []).some(Boolean) || (s.hours || []).some(v => v !== "" && v !== undefined)) && (
+                      <div style={{ fontSize: 10, color: T.accent, marginTop: 2 }}>⏰ custom time/hours</div>
                     )}
                     <div style={{ marginTop: 6 }}>
                       <input
