@@ -526,6 +526,11 @@ export default function App() {
   const [aiParserLoading, setAiParserLoading] = useState(false);
   const [aiParserError, setAiParserError] = useState("");
   const [aiPasteLoading, setAiPasteLoading] = useState(false);
+  const [gridMode, setGridMode] = useState(false);
+  const [gridRows, setGridRows] = useState([]); // array of arrays of cell strings
+  const [gridMapping, setGridMapping] = useState([]); // per-column field assignment
+  const [gridHasHeader, setGridHasHeader] = useState(false);
+  const [gridAiLoading, setGridAiLoading] = useState(false);
   const konamiRef = useRef([]);
   const konamiCode = ["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
   const [customParsers, setCustomParsers] = useState([]);
@@ -1018,7 +1023,119 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  const parsePaste = () => {
+  // ---- Spreadsheet-style grid preview helpers ----
+  const GRID_FIELD_OPTIONS = [
+    { value: "ignore", label: "Ignore" },
+    { value: "code", label: "Site Code" },
+    { value: "branch", label: "Branch Name" },
+    { value: "address", label: "Address" },
+    { value: "address2", label: "Address 2 (suite/unit)" },
+    { value: "city", label: "City" },
+    { value: "state", label: "State" },
+    { value: "zip", label: "Zip" },
+    { value: "date", label: "Date" },
+    { value: "fulladdr", label: "Full Address (auto-split)" },
+  ];
+
+  const gridParseDate = (r) => {
+    if (!r) return woConfig.defaultDate || "";
+    const m = r.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if (m) { let [,mo,d,y] = m; if (y.length===2) y="20"+y; return `${y}-${mo.padStart(2,"0")}-${d.padStart(2,"0")}`; }
+    const dt = new Date(r);
+    return !isNaN(dt) ? dt.toISOString().split("T")[0] : (woConfig.defaultDate || "");
+  };
+
+  const gridSplitAddrCsv = (str) => {
+    const parts = (str || "").split(",").map(x => x.trim());
+    let address = parts[0] || "", city = parts[1] || "", state = "", zip = "";
+    const stateZip = parts[2] || "";
+    const sv = stateZip.match(/^([A-Za-z]{2})\s+(\d{5}(-\d{4})?)$/);
+    if (sv) { state = sv[1].toUpperCase(); zip = sv[2]; } else { state = stateZip; zip = parts[3] || ""; }
+    return { address, city, state, zip };
+  };
+
+  // Parse pasteText into a grid of cells (tab or comma delimited) for preview/editing
+  const enterGridMode = () => {
+    setPasteError("");
+    if (!pasteText.trim()) { setPasteError("Paste your data first."); return; }
+    const rawLines = pasteText.trim().split("\n").filter(l => l.trim());
+    const delim = rawLines[0].includes("\t") ? "\t" : (rawLines[0].includes(",") ? "," : null);
+    if (!delim) { setPasteError("Couldn't detect columns (no tabs or commas found) — try ✨ AI Parse instead."); return; }
+    const rows = rawLines.map(l => l.split(delim).map(c => c.replace(/^"|"$/g, "").trim()));
+    const maxCols = Math.max(...rows.map(r => r.length));
+    const padded = rows.map(r => { const arr = [...r]; while (arr.length < maxCols) arr.push(""); return arr; });
+    const HEADER_WORDS = ["code","name","address","city","state","zip","branch","building","date","site","location"];
+    const first = padded[0].map(h => h.toLowerCase().trim());
+    const looksHeader = first.some(h => HEADER_WORDS.includes(h));
+    setGridRows(padded);
+    setGridMapping(Array(maxCols).fill("ignore"));
+    setGridHasHeader(looksHeader);
+    setGridMode(true);
+  };
+
+  const updateGridCell = (r, c, val) => {
+    setGridRows(prev => prev.map((row, ri) => ri === r ? row.map((cell, ci) => ci === c ? val : cell) : row));
+  };
+
+  // Ask AI to suggest which grid columns map to which fields
+  const aiSuggestGridMapping = async () => {
+    setGridAiLoading(true);
+    setPasteError("");
+    try {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-cpwog-secret": import.meta.env.VITE_AI_SECRET || "" },
+        body: JSON.stringify({ sampleData: pasteText.trim().slice(0, 3000) })
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || e.detail || `Server error ${res.status}`); }
+      const p = await res.json();
+      const mapping = Array(gridRows[0]?.length || 0).fill("ignore");
+      const setIf = (idx, val) => { const n = parseInt(idx); if (!isNaN(n) && n >= 0 && n < mapping.length) mapping[n] = val; };
+      if (p.colFullAddr !== "" && p.colFullAddr !== undefined) setIf(p.colFullAddr, "fulladdr");
+      setIf(p.colCode, "code");
+      setIf(p.colBranch, "branch");
+      setIf(p.colAddr, "address");
+      setIf(p.colAddr2, "address2");
+      setIf(p.colCity, "city");
+      setIf(p.colState, "state");
+      setIf(p.colZip, "zip");
+      setIf(p.colDate, "date");
+      setGridMapping(mapping);
+    } catch (e) {
+      setPasteError(e.message.includes("overloaded") ? "✨ Anthropic is busy — wait a few seconds and try again" : "✨ AI suggest failed: " + e.message);
+    }
+    setGridAiLoading(false);
+  };
+
+  // Build sites from the current grid + mapping and add them to the table
+  const importFromGrid = () => {
+    setPasteError("");
+    const dataRows = gridHasHeader ? gridRows.slice(1) : gridRows;
+    if (!dataRows.length) { setPasteError("No data rows to import."); return; }
+    const colIdx = (field) => gridMapping.findIndex(m => m === field);
+    const iCode = colIdx("code"), iBranch = colIdx("branch"), iAddr = colIdx("address"), iAddr2 = colIdx("address2"),
+          iCity = colIdx("city"), iState = colIdx("state"), iZip = colIdx("zip"), iDate = colIdx("date"), iFull = colIdx("fulladdr");
+    const siteDefaults = { numTechs: woConfig.numTechs || "1", numDays: woConfig.numDays || "1", verified: null, verifying: false, verifyError: "" };
+    const parsed = dataRows.map(cols => {
+      const base = {
+        code: iCode >= 0 ? (cols[iCode] || "") : "",
+        branchName: iBranch >= 0 ? (cols[iBranch] || "") : "",
+        address2: iAddr2 >= 0 ? (cols[iAddr2] || "") : "",
+        date: iDate >= 0 ? gridParseDate(cols[iDate]) : (woConfig.defaultDate || ""),
+        ...siteDefaults
+      };
+      if (iFull >= 0) {
+        const a = gridSplitAddrCsv(cols[iFull]);
+        return { ...base, ...a };
+      }
+      return { ...base, address: iAddr >= 0 ? (cols[iAddr] || "") : "", city: iCity >= 0 ? (cols[iCity] || "") : "", state: iState >= 0 ? (cols[iState] || "") : "", zip: iZip >= 0 ? (cols[iZip] || "") : "" };
+    }).filter(r => r.code || r.address);
+    if (parsed.length === 0) { setPasteError("No rows matched — make sure at least Site Code or Address is mapped to a column."); return; }
+    setSites(prev => { const ex = prev.filter(s => s.code || s.address || s.branchName); return ex.length > 0 ? [...ex, ...parsed] : parsed; });
+    setGridMode(false); setPasteMode(false); setPasteText(""); setGridRows([]); setGridMapping([]);
+  };
+
+
     setPasteError("");
     if (!pasteText.trim()) { setPasteError("Nothing pasted yet."); return; }
 
@@ -1679,8 +1796,8 @@ export default function App() {
           <div>
             <div style={{ display: "flex", borderBottom: `1px solid ${T.border}`, marginBottom: 16 }}>
               <button className={`tab-btn${pasteMode && !importMode ? " active" : ""}`} onClick={() => { setPasteMode(true); setImportMode(false); }}>⌘ Paste from Spreadsheet</button>
-              <button className={`tab-btn${!pasteMode && !importMode ? " active" : ""}`} onClick={() => { setPasteMode(false); setImportMode(false); }}>✎ Edit Table ({sites.length} rows)</button>
-              <button className={`tab-btn${importMode ? " active" : ""}`} onClick={() => { setImportMode(true); setPasteMode(false); }}>⬆ Import CSV</button>
+              <button className={`tab-btn${!pasteMode && !importMode ? " active" : ""}`} onClick={() => { setPasteMode(false); setImportMode(false); setGridMode(false); }}>✎ Edit Table ({sites.length} rows)</button>
+              <button className={`tab-btn${importMode ? " active" : ""}`} onClick={() => { setImportMode(true); setPasteMode(false); setGridMode(false); }}>⬆ Import CSV</button>
               {!pasteMode && !importMode && (
                 <button onClick={() => setClearConfirm(true)} style={{ marginLeft: "auto", background: "transparent", border: "1px solid #ef4444", borderRadius: 6, padding: "4px 12px", color: "#ef4444", cursor: "pointer", fontSize: 11, fontFamily: "inherit", alignSelf: "center" }}>
                   ✕ Clear All
@@ -1695,8 +1812,12 @@ export default function App() {
                 <div style={{ fontSize: 13, color: T.textDim, marginBottom: 20, lineHeight: 1.7 }}>Upload a previously exported FieldNation CSV to re-import its sites.<br/>Sites will be appended to the existing table. Branch names will be blank.</div>
                 <button onClick={() => fileInputRef.current?.click()} style={{ background: `linear-gradient(135deg,${T.accent},#dc6209)`, border: "none", borderRadius: 8, padding: "12px 36px", color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 18, letterSpacing: 2 }}>⬆ CHOOSE CSV FILE</button>
               </div>
-            ) : pasteMode ? (
+            ) : (pasteMode && !gridMode) ? (
               <div>
+                <div style={{ display: "inline-flex", borderRadius: 8, border: `1px solid ${T.border2}`, overflow: "hidden", marginBottom: 10 }}>
+                  <button style={{ padding: "5px 14px", border: "none", background: T.accent, color: "#000", fontWeight: 700, fontSize: 11, fontFamily: "inherit", cursor: "default" }}>Text</button>
+                  <button onClick={enterGridMode} style={{ padding: "5px 14px", border: "none", borderLeft: `1px solid ${T.border2}`, background: "transparent", color: T.textMid, fontSize: 11, fontFamily: "inherit", cursor: "pointer" }}>📊 Grid</button>
+                </div>
                 {adminUnlocked && customParsers.length > 0 && (
                   <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span style={{ fontSize: 11, color: T.textFaint }}>Custom parser:</span>
@@ -1756,26 +1877,59 @@ export default function App() {
                         const res = await fetch("/api/ai", {
                           method: "POST",
                           headers: { "Content-Type": "application/json", "x-cpwog-secret": import.meta.env.VITE_AI_SECRET || "" },
-                          body: JSON.stringify({ sampleData: pasteText.trim().slice(0, 1200) })
+                          body: JSON.stringify({ sampleData: pasteText.trim().slice(0, 3000) })
                         });
                         if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || e.detail || `Server error ${res.status}`); }
                         const p = await res.json();
-                        // Apply the mapping directly to the pasted data
-                        const delim = p.delim === "tab" ? "\t" : ",";
-                        const rawLines = pasteText.trim().split("\n").filter(l => l.trim());
-                        const lines = rawLines.map(l => l.split(delim).map(c => c.replace(/^"|"$/g, "").trim()));
                         const get = (cols, idx) => { const n = parseInt(idx); return isNaN(n) ? "" : (cols[n] || ""); };
-                        const parseD = (r) => { if (!r) return woConfig.defaultDate || ""; const m = r.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if (m) { let [,mo,d,y] = m; if (y.length===2) y="20"+y; return `${y}-${mo.padStart(2,"0")}-${d.padStart(2,"0")}`; } return r || woConfig.defaultDate || ""; };
-                        const parsed = lines.filter(c => c.length > 1).map(cols => {
-                          const base = { code: get(cols, p.colCode), branchName: get(cols, p.colBranch), address2: "", date: parseD(get(cols, p.colDate)), numTechs: woConfig.numTechs || "1", numDays: woConfig.numDays || "1", verified: null, verifying: false, verifyError: "" };
-                          if (p.colFullAddr && !isNaN(parseInt(p.colFullAddr))) {
-                            const parts = get(cols, p.colFullAddr).split(",").map(x => x.trim());
-                            const last = parts[parts.length-1] || ""; const sv = last.match(/^([A-Z]{2})\s+(\d{5})$/);
-                            return { ...base, address: parts[0]||"", city: parts[1]||"", state: sv ? sv[1] : (parts[2]||""), zip: sv ? sv[2] : (parts[3]||"") };
+                        const parseD = (r) => { if (!r) return woConfig.defaultDate || ""; const m = r.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if (m) { let [,mo,d,y] = m; if (y.length===2) y="20"+y; return `${y}-${mo.padStart(2,"0")}-${d.padStart(2,"0")}`; } const dt = new Date(r); return !isNaN(dt) ? dt.toISOString().split("T")[0] : (woConfig.defaultDate || ""); };
+                        const splitAddrCsv = (str) => {
+                          const parts = str.split(",").map(x => x.trim());
+                          let address = parts[0] || "", city = parts[1] || "", state = "", zip = "";
+                          const stateZip = parts[2] || "";
+                          const sv = stateZip.match(/^([A-Za-z]{2})\s+(\d{5}(-\d{4})?)$/);
+                          if (sv) { state = sv[1].toUpperCase(); zip = sv[2]; } else { state = stateZip; zip = parts[3] || ""; }
+                          return { address, city, state, zip };
+                        };
+                        const rawLines = pasteText.trim().split("\n").filter(l => l.trim());
+                        const siteDefaults = { numTechs: woConfig.numTechs || "1", numDays: woConfig.numDays || "1", verified: null, verifying: false, verifyError: "" };
+
+                        let parsed = [];
+                        if (p.layout === "blocks" && Number(p.blockSize) > 0 && Array.isArray(p.blockRoles)) {
+                          const size = Number(p.blockSize);
+                          for (let i = 0; i + size - 1 < rawLines.length; i += size) {
+                            const rec = { code: "", branchName: "", address: "", address2: "", city: "", state: "", zip: "", date: "" };
+                            for (let j = 0; j < size; j++) {
+                              const role = (p.blockRoles[j] || "").toLowerCase();
+                              const line = (rawLines[i + j] || "").trim();
+                              if (role === "code") rec.code = line;
+                              else if (role === "branch" || role === "branchname") rec.branchName = line;
+                              else if (role === "date") rec.date = parseD(line);
+                              else if (role.includes("address2") || role.includes("suite") || role.includes("unit")) rec.address2 = line;
+                              else if (role.includes("address")) { const a = splitAddrCsv(line); rec.address = a.address; rec.city = a.city; rec.state = a.state; rec.zip = a.zip; }
+                            }
+                            if (rec.code || rec.address) parsed.push({ ...rec, date: rec.date || (woConfig.defaultDate || ""), ...siteDefaults });
                           }
-                          return { ...base, address: get(cols, p.colAddr), city: get(cols, p.colCity), state: get(cols, p.colState), zip: get(cols, p.colZip) };
-                        }).filter(r => r.code || r.address);
-                        if (parsed.length === 0) { setPasteError("AI couldn\'t find site data — try PARSE → instead"); setAiPasteLoading(false); return; }
+                        } else if (p.delim === "tab" || p.delim === "comma") {
+                          const delim = p.delim === "tab" ? "\t" : ",";
+                          const lines = rawLines.map(l => l.split(delim).map(c => c.replace(/^"|"$/g, "").trim()));
+                          parsed = lines.filter(c => c.length > 1).map(cols => {
+                            const base = { code: get(cols, p.colCode), branchName: get(cols, p.colBranch), address2: get(cols, p.colAddr2), date: parseD(get(cols, p.colDate)), ...siteDefaults };
+                            if (p.colFullAddr !== "" && !isNaN(parseInt(p.colFullAddr))) {
+                              const a = splitAddrCsv(get(cols, p.colFullAddr));
+                              return { ...base, ...a };
+                            }
+                            return { ...base, address: get(cols, p.colAddr), city: get(cols, p.colCity), state: get(cols, p.colState), zip: get(cols, p.colZip) };
+                          }).filter(r => r.code || r.address);
+                        }
+
+                        if (parsed.length === 0) {
+                          // AI couldn't find a usable mapping — fall back to the built-in heuristic parser
+                          setPasteError("✨ AI couldn't confidently map this format — falling back to the standard parser…");
+                          parsePaste();
+                          setAiPasteLoading(false);
+                          return;
+                        }
                         setSites(prev => { const ex = prev.filter(s => s.code || s.address || s.branchName); return ex.length > 0 ? [...ex, ...parsed] : parsed; });
                         setPasteMode(false); setPasteText("");
                       } catch(e) { setPasteError(e.message.includes("overloaded") ? "✨ Anthropic is busy — wait a few seconds and try again" : "✨ AI Parse failed: " + e.message); }
@@ -1788,6 +1942,63 @@ export default function App() {
                     Skip — Enter Manually
                   </button>
                 </div>{/* - */}
+              </div>
+            ) : (pasteMode && gridMode) ? (
+              <div>
+                <div style={{ display: "inline-flex", borderRadius: 8, border: `1px solid ${T.border2}`, overflow: "hidden", marginBottom: 10 }}>
+                  <button onClick={() => setGridMode(false)} style={{ padding: "5px 14px", border: "none", background: "transparent", color: T.textMid, fontSize: 11, fontFamily: "inherit", cursor: "pointer" }}>Text</button>
+                  <button style={{ padding: "5px 14px", border: "none", borderLeft: `1px solid ${T.border2}`, background: T.accent, color: "#000", fontWeight: 700, fontSize: 11, fontFamily: "inherit", cursor: "default" }}>📊 Grid</button>
+                </div>
+                <p style={{ color: T.textDim, fontSize: 12, marginBottom: 10, lineHeight: 1.6 }}>
+                  Check that your data lines up correctly, fix any cells, then map each column to a field below. Use ✨ AI Suggest to auto-fill the mapping.
+                </p>
+                {pasteError && <div style={{ color: "#f87171", fontSize: 11, marginBottom: 8 }}>⚠ {pasteError}</div>}
+                <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+                  <button disabled={gridAiLoading} onClick={aiSuggestGridMapping} style={{ padding: "8px 18px", borderRadius: 6, border: "none", background: gridAiLoading ? T.disabledBg : "linear-gradient(135deg,#7c3aed,#5b21b6)", color: gridAiLoading ? T.disabledText : "#fff", cursor: gridAiLoading ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5 }}>
+                    {gridAiLoading ? "⏳ Analyzing..." : "✨ AI Suggest Mapping"}
+                  </button>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: T.textMid, cursor: "pointer" }}>
+                    <input type="checkbox" checked={gridHasHeader} onChange={e => setGridHasHeader(e.target.checked)} />
+                    First row is a header (skip when importing)
+                  </label>
+                </div>
+                <div style={{ overflowX: "auto", border: `1px solid ${T.border2}`, borderRadius: 8, maxHeight: 360, overflowY: "auto" }}>
+                  <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 11 }}>
+                    <thead>
+                      <tr>
+                        {gridMapping.map((m, ci) => (
+                          <th key={ci} style={{ position: "sticky", top: 0, background: T.surface2, padding: "6px 4px", borderBottom: `2px solid ${T.border2}`, borderRight: `1px solid ${T.border}`, minWidth: 110 }}>
+                            <select value={m} onChange={e => setGridMapping(prev => prev.map((v, i) => i === ci ? e.target.value : v))} style={{ width: "100%", background: m !== "ignore" ? `${T.accent}22` : T.surface, color: m !== "ignore" ? T.accentHi : T.textDim, border: `1px solid ${m !== "ignore" ? T.accent : T.border2}`, borderRadius: 5, padding: "3px 4px", fontSize: 10, fontFamily: "inherit" }}>
+                              {GRID_FIELD_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            </select>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gridRows.map((row, ri) => (
+                        <tr key={ri} style={{ background: gridHasHeader && ri === 0 ? T.surface2 : "transparent", opacity: gridHasHeader && ri === 0 ? 0.5 : 1 }}>
+                          {row.map((cell, ci) => (
+                            <td key={ci} style={{ borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, padding: 0 }}>
+                              <input
+                                value={cell}
+                                onChange={e => updateGridCell(ri, ci, e.target.value)}
+                                style={{ width: "100%", boxSizing: "border-box", background: "transparent", border: "none", color: T.text, fontSize: 11, fontFamily: "inherit", padding: "5px 6px", outline: "none" }}
+                                onFocus={e => e.target.style.background = T.surface2}
+                                onBlur={e => e.target.style.background = "transparent"}
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                  <button onClick={importFromGrid} style={{ background: `linear-gradient(135deg,${T.accent},#dc6209)`, border: "none", borderRadius: 6, padding: "8px 20px", color: "#000", cursor: "pointer", fontSize: 12, fontFamily: "'Bebas Neue',sans-serif", letterSpacing: 1.5 }}>
+                    IMPORT {gridHasHeader ? Math.max(0, gridRows.length - 1) : gridRows.length} ROWS →
+                  </button>
+                </div>
               </div>
             ) : (
               <div>
