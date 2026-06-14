@@ -139,23 +139,31 @@ function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
     return { start: normalizeTime(start), end: normalizeTime(end) };
   };
 
+  // Per-day estimated hours resolver — priority: per-site override > main approxHours
+  const hoursForDay = (d) => {
+    const siteOverride = (site.hours && site.hours[d] !== undefined && site.hours[d] !== "") ? Number(site.hours[d]) : null;
+    return siteOverride !== null && !isNaN(siteOverride) ? siteOverride : hours;
+  };
+
   if (numTechs > 1) {
     for (let t = 1; t <= numTechs; t++) {
       for (let d = 0; d < numDays; d++) {
         const date = addDays(site.date, d);
         const { start, end } = timeForDay(d);
+        const dayHours = hoursForDay(d);
         const siteId = `${site.code}-${meta.siteIdSuffix}(${t})`;
         const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-        rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: start, endTime: end, techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[t - 1] || "" }));
+        rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: start, endTime: end, techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: dayHours, estDuration: dayHours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[t - 1] || "" }));
       }
     }
   } else {
     for (let d = 0; d < numDays; d++) {
       const date = addDays(site.date, d);
       const { start, end } = timeForDay(d);
+      const dayHours = hoursForDay(d);
       const siteId = `${site.code}-${meta.siteIdSuffix}`;
       const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-      rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: start, endTime: end, techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: hours, estDuration: hours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[0] || "" }));
+      rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: start, endTime: end, techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: dayHours, estDuration: dayHours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[0] || "" }));
     }
     if (numDays > 1) rows.push([]);
   }
@@ -257,7 +265,7 @@ function toCSV(headers, rows) {
 const EMPTY_SITE = () => ({
   code: "", branchName: "", address: "", address2: "",
   city: "", state: "", zip: "", date: "",
-  numTechs: "", numDays: "", budgetTech: "", payRate: "", womId: "", routeToTechs: [], startTimes: [],
+  numTechs: "", numDays: "", budgetTech: "", payRate: "", womId: "", routeToTechs: [], startTimes: [], hours: [],
   verified: null, verifying: false, verifyError: ""
 });
 
@@ -491,6 +499,10 @@ export default function App() {
   const [routePasteText, setRoutePasteText] = useState("");
   const [fnVerifyResults, setFnVerifyResults] = useState({}); // { [id]: { status, name, role, source } }
   const [fnVerifying, setFnVerifying] = useState(false);
+  const [bulkTimeSelected, setBulkTimeSelected] = useState([]); // indices of sites selected for bulk time edit
+  const [bulkTimeDay, setBulkTimeDay] = useState(0);
+  const [bulkTimeValue, setBulkTimeValue] = useState("");
+  const [bulkTimeField, setBulkTimeField] = useState("time"); // "time" | "hours"
   const [woTemplates, setWoTemplates] = useState([]);
   const [showTemplatePanel, setShowTemplatePanel] = useState(false);
   const [templateSaveName, setTemplateSaveName] = useState("");
@@ -2030,12 +2042,12 @@ export default function App() {
               );
             })()}
 
-            {/* Per-Site Start Times button — only relevant for multi-day, non-SDT types */}
-            {woType !== "SDT" && Number(woConfig.numDays) > 1 && (() => {
-              const overrideCount = sites.filter(s => rowComplete(s) && (s.startTimes || []).some(Boolean)).length;
+            {/* Per-Site Start Times & Hours button — available for all types except SDT (fixed schedule) */}
+            {woType !== "SDT" && (() => {
+              const overrideCount = sites.filter(s => rowComplete(s) && ((s.startTimes || []).some(Boolean) || (s.hours || []).some(v => v !== "" && v !== undefined))).length;
               return (
                 <button onClick={() => setShowTimesPanel(true)} style={{ width: "100%", marginBottom: 10, padding: "10px", borderRadius: 10, border: `1px solid ${overrideCount > 0 ? T.accent : T.border2}`, background: overrideCount > 0 ? `${T.accent}18` : "transparent", color: overrideCount > 0 ? T.accentHi : T.textMid, cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  ⏰ {overrideCount > 0 ? `PER-SITE TIMES  —  ${overrideCount} of ${sites.filter(rowComplete).length} sites customized` : "PER-SITE START TIMES  —  OPTIONAL"}
+                  ⏰ {overrideCount > 0 ? `PER-SITE TIMES & HOURS  —  ${overrideCount} of ${sites.filter(rowComplete).length} sites customized` : "PER-SITE TIMES & HOURS  —  OPTIONAL"}
                 </button>
               );
             })()}
@@ -2729,11 +2741,57 @@ export default function App() {
               {/* Header */}
               <div style={{ padding: "1.25rem 1.5rem", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, background: T.surface, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
-                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accentHi }}>⏰ PER-SITE START TIMES</div>
-                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 2 }}>Override the start time for specific days at specific sites · blank = use default</div>
+                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accentHi }}>⏰ PER-SITE TIMES & HOURS</div>
+                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 2 }}>Override start time and/or estimated hours for specific days at specific sites · blank = use default</div>
                 </div>
                 <button onClick={() => setShowTimesPanel(false)} style={{ background: "transparent", border: "none", color: T.textMid, cursor: "pointer", fontSize: 20, flexShrink: 0 }}>✕</button>
               </div>
+
+              {/* Bulk apply toolbar */}
+              {(() => {
+                const dayCounts = sites.filter(rowComplete).map(s => Number(s.numDays || woConfig.numDays) || 1);
+                const maxDays = dayCounts.length ? Math.max(1, Math.min(7, Math.max(...dayCounts))) : 1;
+                const dayOptions = Array.from({ length: maxDays }, (_, i) => i);
+                return (
+                  <div style={{ padding: "0.85rem 1.5rem", borderBottom: `1px solid ${T.border}`, background: T.surface2 }}>
+                    <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>Bulk Apply — {bulkTimeSelected.length} site{bulkTimeSelected.length !== 1 ? "s" : ""} selected</div>
+                    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                      <button onClick={() => { setBulkTimeField("time"); setBulkTimeValue(""); }} style={{ flex: 1, padding: "6px", borderRadius: 7, border: `2px solid ${bulkTimeField === "time" ? T.accent : T.border2}`, background: bulkTimeField === "time" ? `${T.accent}22` : "transparent", color: bulkTimeField === "time" ? T.accentHi : T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>Start Time</button>
+                      <button onClick={() => { setBulkTimeField("hours"); setBulkTimeValue(""); }} style={{ flex: 1, padding: "6px", borderRadius: 7, border: `2px solid ${bulkTimeField === "hours" ? T.accent : T.border2}`, background: bulkTimeField === "hours" ? `${T.accent}22` : "transparent", color: bulkTimeField === "hours" ? T.accentHi : T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>Est. Hours</button>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+                      {maxDays > 1 && (
+                        <div>
+                          <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>Day</label>
+                          <select value={bulkTimeDay} onChange={e => setBulkTimeDay(Number(e.target.value))} style={{ ...T.inp, fontSize: 12, height: 36, fontFamily: "inherit" }}>
+                            {dayOptions.map(d => <option key={d} value={d}>Day {d + 1}</option>)}
+                          </select>
+                        </div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 100 }}>
+                        <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>{bulkTimeField === "time" ? "Start Time" : "Est. Hours"}</label>
+                        <input style={{ ...T.inp, fontSize: 12, height: 36 }} placeholder={bulkTimeField === "time" ? "e.g. 9:00am" : "e.g. 4"} value={bulkTimeValue} onChange={e => setBulkTimeValue(e.target.value)} onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+                      </div>
+                      <button disabled={!bulkTimeSelected.length || !bulkTimeValue.trim()} onClick={() => {
+                        setSites(prev => prev.map((s, idx) => {
+                          if (!bulkTimeSelected.includes(idx)) return s;
+                          if (bulkTimeField === "time") {
+                            const arr = [...(s.startTimes || [])];
+                            arr[bulkTimeDay] = bulkTimeValue.trim();
+                            return { ...s, startTimes: arr };
+                          } else {
+                            const arr = [...(s.hours || [])];
+                            arr[bulkTimeDay] = bulkTimeValue.trim();
+                            return { ...s, hours: arr };
+                          }
+                        }));
+                      }} style={{ padding: "8px 14px", borderRadius: 8, border: "none", height: 36, background: (!bulkTimeSelected.length || !bulkTimeValue.trim()) ? T.disabledBg : `linear-gradient(135deg,${T.accent},#dc6209)`, color: (!bulkTimeSelected.length || !bulkTimeValue.trim()) ? T.disabledText : "#000", cursor: (!bulkTimeSelected.length || !bulkTimeValue.trim()) ? "not-allowed" : "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5, whiteSpace: "nowrap" }}>APPLY</button>
+                      <button onClick={() => setBulkTimeSelected(sites.map((s, idx) => rowComplete(s) ? idx : null).filter(v => v !== null))} style={{ padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border2}`, height: 36, background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>Select all</button>
+                      {bulkTimeSelected.length > 0 && <button onClick={() => setBulkTimeSelected([])} style={{ padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border2}`, height: 36, background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>Clear selection</button>}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Per-site, per-day list */}
               <div style={{ flex: 1, padding: "1rem 1.5rem", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -2741,22 +2799,29 @@ export default function App() {
                   const numDays = Math.max(1, Math.min(7, Number(site.numDays || woConfig.numDays) || 1));
                   const days = Array.from({ length: numDays }, (_, i) => i);
                   const startTimes = site.startTimes || [];
-                  const anyOverride = startTimes.some(Boolean);
+                  const hoursVals = site.hours || [];
+                  const anyOverride = startTimes.some(Boolean) || hoursVals.some(v => v !== "" && v !== undefined);
                   return (
                     <div key={realIdx} style={{ background: T.surface2, border: `1px solid ${anyOverride ? T.accent : T.border}`, borderRadius: 10, padding: "0.85rem 1rem" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                        <div>
-                          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, letterSpacing: 1.5, color: anyOverride ? T.accentHi : T.textMid }}>
-                            {site.code}{site.branchName ? ` — ${site.branchName}` : ""}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div onClick={() => setBulkTimeSelected(prev => prev.includes(realIdx) ? prev.filter(i => i !== realIdx) : [...prev, realIdx])} style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${bulkTimeSelected.includes(realIdx) ? T.accent : T.border2}`, background: bulkTimeSelected.includes(realIdx) ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
+                            {bulkTimeSelected.includes(realIdx) && <span style={{ color: "#000", fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>}
                           </div>
-                          <div style={{ fontSize: 10, color: T.textFaint, marginTop: 1 }}>{site.city}, {site.state} · {numDays} day{numDays > 1 ? "s" : ""} · Day 1: {site.date || "—"}</div>
+                          <div>
+                            <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, letterSpacing: 1.5, color: anyOverride ? T.accentHi : T.textMid }}>
+                              {site.code}{site.branchName ? ` — ${site.branchName}` : ""}
+                            </div>
+                            <div style={{ fontSize: 10, color: T.textFaint, marginTop: 1 }}>{site.city}, {site.state} · {numDays} day{numDays > 1 ? "s" : ""} · Day 1: {site.date || "—"}</div>
+                          </div>
                         </div>
                         {anyOverride && (
-                          <button onClick={() => setSites(prev => prev.map((s, idx) => idx === realIdx ? { ...s, startTimes: [] } : s))}
+                          <button onClick={() => setSites(prev => prev.map((s, idx) => idx === realIdx ? { ...s, startTimes: [], hours: [] } : s))}
                             style={{ background: "transparent", border: "none", color: T.textFaint, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>clear</button>
                         )}
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: `repeat(${numDays}, 1fr)`, gap: 8 }}>
+                      <div style={{ fontSize: 9, color: T.textFaint, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1 }}>Start Time</div>
+                      <div style={{ display: "grid", gridTemplateColumns: `repeat(${numDays}, 1fr)`, gap: 8, marginBottom: 10 }}>
                         {days.map(d => {
                           const globalDay = (woConfig.perDayTimes && woConfig.startTimes && woConfig.startTimes[d]) ? woConfig.startTimes[d] : woConfig.startTime;
                           return (
@@ -2777,6 +2842,26 @@ export default function App() {
                             </div>
                           );
                         })}
+                      </div>{/* - */}
+                      <div style={{ fontSize: 9, color: T.textFaint, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1 }}>Est. Hours</div>
+                      <div style={{ display: "grid", gridTemplateColumns: `repeat(${numDays}, 1fr)`, gap: 8 }}>
+                        {days.map(d => (
+                          <div key={d}>
+                            <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>{dayLabel(site.date, d)}</label>
+                            <input
+                              style={{ ...T.inp, fontSize: 12, ...(hoursVals[d] !== "" && hoursVals[d] !== undefined ? { borderColor: T.accent } : {}) }}
+                              placeholder={woConfig.approxHours || "default"}
+                              value={hoursVals[d] !== undefined ? hoursVals[d] : ""}
+                              onChange={e => {
+                                const arr = [...hoursVals];
+                                arr[d] = e.target.value;
+                                setSites(prev => prev.map((s, idx) => idx === realIdx ? { ...s, hours: arr } : s));
+                              }}
+                              onFocus={e => e.target.style.borderColor = T.accent}
+                              onBlur={e => e.target.style.borderColor = (hoursVals[d] !== "" && hoursVals[d] !== undefined) ? T.accent : T.border2}
+                            />
+                          </div>
+                        ))}
                       </div>{/* - */}
                     </div>
                   );
