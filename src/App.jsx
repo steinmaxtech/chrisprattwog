@@ -145,15 +145,29 @@ function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
     return siteOverride !== null && !isNaN(siteOverride) ? siteOverride : hours;
   };
 
+  // Per-day budget/pay resolver — priority: per-site-per-day override > per-site override > main config
+  const budgetForDay = (d) => {
+    const dayOverride = (site.budgetTechs && site.budgetTechs[d] !== undefined && site.budgetTechs[d] !== "") ? Number(site.budgetTechs[d]) : null;
+    if (dayOverride !== null && !isNaN(dayOverride)) return dayOverride;
+    return budget;
+  };
+  const payForDay = (d) => {
+    const dayOverride = (site.payRates && site.payRates[d] !== undefined && site.payRates[d] !== "") ? Number(site.payRates[d]) : null;
+    if (dayOverride !== null && !isNaN(dayOverride)) return dayOverride;
+    return pay;
+  };
+
   if (numTechs > 1) {
     for (let t = 1; t <= numTechs; t++) {
       for (let d = 0; d < numDays; d++) {
         const date = addDays(site.date, d);
         const { start, end } = timeForDay(d);
         const dayHours = hoursForDay(d);
+        const dayBudget = budgetForDay(d);
+        const dayPay = payForDay(d);
         const siteId = `${site.code}-${meta.siteIdSuffix}(${t})`;
         const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-        rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: start, endTime: end, techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: dayHours, estDuration: dayHours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[t - 1] || "" }));
+        rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: start, endTime: end, techType: cfg.techType, budgetTech: dayBudget, maxBudget: dayBudget, payRate: dayPay, approxHours: dayHours, estDuration: dayHours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[t - 1] || "" }));
       }
     }
   } else {
@@ -161,9 +175,11 @@ function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
       const date = addDays(site.date, d);
       const { start, end } = timeForDay(d);
       const dayHours = hoursForDay(d);
+      const dayBudget = budgetForDay(d);
+      const dayPay = payForDay(d);
       const siteId = `${site.code}-${meta.siteIdSuffix}`;
       const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-      rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: start, endTime: end, techType: cfg.techType, budgetTech: budget, maxBudget: budget, payRate: pay, approxHours: dayHours, estDuration: dayHours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[0] || "" }));
+      rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: start, endTime: end, techType: cfg.techType, budgetTech: dayBudget, maxBudget: dayBudget, payRate: dayPay, approxHours: dayHours, estDuration: dayHours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[0] || "" }));
     }
     if (numDays > 1) rows.push([]);
   }
@@ -265,7 +281,7 @@ function toCSV(headers, rows) {
 const EMPTY_SITE = () => ({
   code: "", branchName: "", address: "", address2: "",
   city: "", state: "", zip: "", date: "",
-  numTechs: "", numDays: "", budgetTech: "", payRate: "", womId: "", routeToTechs: [], startTimes: [], hours: [],
+  numTechs: "", numDays: "", budgetTech: "", payRate: "", womId: "", routeToTechs: [], startTimes: [], hours: [], budgetTechs: [], payRates: [],
   verified: null, verifying: false, verifyError: ""
 });
 
@@ -2283,26 +2299,30 @@ export default function App() {
                 );
               })()}
               {(() => {
-                const timeOverrides = sites.filter(s => rowComplete(s) && ((s.startTimes || []).some(Boolean) || (s.hours || []).some(v => v !== "" && v !== undefined)));
+                const timeOverrides = sites.filter(s => rowComplete(s) && ((s.startTimes || []).some(Boolean) || (s.hours || []).some(v => v !== "" && v !== undefined) || (s.budgetTechs || []).some(v => v !== "" && v !== undefined) || (s.payRates || []).some(v => v !== "" && v !== undefined)));
                 if (!timeOverrides.length) return null;
                 return (
                   <div style={{ padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
-                    <div style={{ fontSize: 10, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 6 }}>Per-site time / hours overrides</div>
+                    <div style={{ fontSize: 10, color: T.textFaint, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 6 }}>Per-site time / hours / pay overrides</div>
                     {timeOverrides.map((s, i) => {
                       const numDays = Math.max(1, Math.min(7, Number(s.numDays || woConfig.numDays) || 1));
-                      const days = Array.from({ length: numDays }, (_, d) => d).filter(d => (s.startTimes || [])[d] || ((s.hours || [])[d] !== "" && (s.hours || [])[d] !== undefined));
+                      const days = Array.from({ length: numDays }, (_, d) => d).filter(d => (s.startTimes || [])[d] || ((s.hours || [])[d] !== "" && (s.hours || [])[d] !== undefined) || ((s.budgetTechs || [])[d] !== "" && (s.budgetTechs || [])[d] !== undefined) || ((s.payRates || [])[d] !== "" && (s.payRates || [])[d] !== undefined));
                       return (
                         <div key={i} style={{ fontSize: 11, color: T.textDim, lineHeight: 1.8, paddingBottom: 4 }}>
                           <div style={{ color: T.textMid, fontWeight: 600 }}>↳ {s.code}</div>
                           {days.map(d => {
                             const t = (s.startTimes || [])[d];
                             const h = (s.hours || [])[d];
+                            const b = (s.budgetTechs || [])[d];
+                            const p = (s.payRates || [])[d];
                             return (
-                              <div key={d} style={{ display: "flex", justifyContent: "space-between", paddingLeft: 12 }}>
+                              <div key={d} style={{ display: "flex", justifyContent: "space-between", paddingLeft: 12, flexWrap: "wrap", gap: 4 }}>
                                 <span style={{ color: T.textFaint }}>{dayLabel(s.date, d)}</span>
-                                <span style={{ display: "flex", gap: 8 }}>
+                                <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                                   {t ? <span>Start <span style={{ color: T.accent }}>{t}</span></span> : null}
                                   {(h !== "" && h !== undefined) ? <span>Hours <span style={{ color: T.accent }}>{h}</span></span> : null}
+                                  {(b !== "" && b !== undefined) ? <span>Budget <span style={{ color: T.accent }}>${b}</span></span> : null}
+                                  {(p !== "" && p !== undefined) ? <span>Pay <span style={{ color: T.accent }}>${p}</span></span> : null}
                                 </span>
                               </div>
                             );
@@ -2346,8 +2366,8 @@ export default function App() {
                     {(s.budgetTech || s.payRate) && (
                       <div style={{ fontSize: 10, color: T.accent, marginTop: 2 }}>⚡ {s.budgetTech ? `$${s.budgetTech}` : `$${woConfig.budgetTech}`} / {s.payRate ? `$${s.payRate}` : `$${woConfig.payRate}`}</div>
                     )}
-                    {((s.startTimes || []).some(Boolean) || (s.hours || []).some(v => v !== "" && v !== undefined)) && (
-                      <div style={{ fontSize: 10, color: T.accent, marginTop: 2 }}>⏰ custom time/hours</div>
+                    {((s.startTimes || []).some(Boolean) || (s.hours || []).some(v => v !== "" && v !== undefined) || (s.budgetTechs || []).some(v => v !== "" && v !== undefined) || (s.payRates || []).some(v => v !== "" && v !== undefined)) && (
+                      <div style={{ fontSize: 10, color: T.accent, marginTop: 2 }}>⏰ custom time/hours/pay</div>
                     )}
                     <div style={{ marginTop: 6 }}>
                       <input
@@ -2376,10 +2396,10 @@ export default function App() {
 
             {/* Per-Site Start Times & Hours button — available for all types except SDT (fixed schedule) */}
             {woType !== "SDT" && (() => {
-              const overrideCount = sites.filter(s => rowComplete(s) && ((s.startTimes || []).some(Boolean) || (s.hours || []).some(v => v !== "" && v !== undefined))).length;
+              const overrideCount = sites.filter(s => rowComplete(s) && ((s.startTimes || []).some(Boolean) || (s.hours || []).some(v => v !== "" && v !== undefined) || (s.budgetTechs || []).some(v => v !== "" && v !== undefined) || (s.payRates || []).some(v => v !== "" && v !== undefined))).length;
               return (
                 <button onClick={() => setShowTimesPanel(true)} style={{ width: "100%", marginBottom: 10, padding: "10px", borderRadius: 10, border: `1px solid ${overrideCount > 0 ? T.accent : T.border2}`, background: overrideCount > 0 ? `${T.accent}18` : "transparent", color: overrideCount > 0 ? T.accentHi : T.textMid, cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  ⏰ {overrideCount > 0 ? `PER-SITE TIMES & HOURS  —  ${overrideCount} of ${sites.filter(rowComplete).length} sites customized` : "PER-SITE TIMES & HOURS  —  OPTIONAL"}
+                  ⏰ {overrideCount > 0 ? `PER-SITE TIMES, HOURS & PAY  —  ${overrideCount} of ${sites.filter(rowComplete).length} sites customized` : "PER-SITE TIMES, HOURS & PAY  —  OPTIONAL"}
                 </button>
               );
             })()}
@@ -3073,8 +3093,8 @@ export default function App() {
               {/* Header */}
               <div style={{ padding: "1.25rem 1.5rem", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, background: T.surface, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
-                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accentHi }}>⏰ PER-SITE TIMES & HOURS</div>
-                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 2 }}>Override start time and/or estimated hours for specific days at specific sites · blank = use default</div>
+                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accentHi }}>⏰ PER-SITE TIMES, HOURS & PAY</div>
+                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 2 }}>Override start time, estimated hours, budget, and pay rate for specific days at specific sites · blank = use default</div>
                 </div>
                 <button onClick={() => setShowTimesPanel(false)} style={{ background: "transparent", border: "none", color: T.textMid, cursor: "pointer", fontSize: 20, flexShrink: 0 }}>✕</button>
               </div>
@@ -3087,9 +3107,11 @@ export default function App() {
                 return (
                   <div style={{ padding: "0.85rem 1.5rem", borderBottom: `1px solid ${T.border}`, background: T.surface2 }}>
                     <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>Bulk Apply — {bulkTimeSelected.length} site{bulkTimeSelected.length !== 1 ? "s" : ""} selected</div>
-                    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                      <button onClick={() => { setBulkTimeField("time"); setBulkTimeValue(""); }} style={{ flex: 1, padding: "6px", borderRadius: 7, border: `2px solid ${bulkTimeField === "time" ? T.accent : T.border2}`, background: bulkTimeField === "time" ? `${T.accent}22` : "transparent", color: bulkTimeField === "time" ? T.accentHi : T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>Start Time</button>
-                      <button onClick={() => { setBulkTimeField("hours"); setBulkTimeValue(""); }} style={{ flex: 1, padding: "6px", borderRadius: 7, border: `2px solid ${bulkTimeField === "hours" ? T.accent : T.border2}`, background: bulkTimeField === "hours" ? `${T.accent}22` : "transparent", color: bulkTimeField === "hours" ? T.accentHi : T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>Est. Hours</button>
+                    <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+                      <button onClick={() => { setBulkTimeField("time"); setBulkTimeValue(""); }} style={{ flex: 1, minWidth: 80, padding: "6px", borderRadius: 7, border: `2px solid ${bulkTimeField === "time" ? T.accent : T.border2}`, background: bulkTimeField === "time" ? `${T.accent}22` : "transparent", color: bulkTimeField === "time" ? T.accentHi : T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>Start Time</button>
+                      <button onClick={() => { setBulkTimeField("hours"); setBulkTimeValue(""); }} style={{ flex: 1, minWidth: 80, padding: "6px", borderRadius: 7, border: `2px solid ${bulkTimeField === "hours" ? T.accent : T.border2}`, background: bulkTimeField === "hours" ? `${T.accent}22` : "transparent", color: bulkTimeField === "hours" ? T.accentHi : T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>Est. Hours</button>
+                      <button onClick={() => { setBulkTimeField("budget"); setBulkTimeValue(""); }} style={{ flex: 1, minWidth: 80, padding: "6px", borderRadius: 7, border: `2px solid ${bulkTimeField === "budget" ? T.accent : T.border2}`, background: bulkTimeField === "budget" ? `${T.accent}22` : "transparent", color: bulkTimeField === "budget" ? T.accentHi : T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>Budget</button>
+                      <button onClick={() => { setBulkTimeField("pay"); setBulkTimeValue(""); }} style={{ flex: 1, minWidth: 80, padding: "6px", borderRadius: 7, border: `2px solid ${bulkTimeField === "pay" ? T.accent : T.border2}`, background: bulkTimeField === "pay" ? `${T.accent}22` : "transparent", color: bulkTimeField === "pay" ? T.accentHi : T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>Pay Rate</button>
                     </div>
                     <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
                       {maxDays > 1 && (
@@ -3101,8 +3123,8 @@ export default function App() {
                         </div>
                       )}
                       <div style={{ flex: 1, minWidth: 100 }}>
-                        <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>{bulkTimeField === "time" ? "Start Time" : "Est. Hours"}</label>
-                        <input style={{ ...T.inp, fontSize: 12, height: 36 }} placeholder={bulkTimeField === "time" ? "e.g. 9:00am" : "e.g. 4"} value={bulkTimeValue} onChange={e => setBulkTimeValue(e.target.value)} onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+                        <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>{bulkTimeField === "time" ? "Start Time" : bulkTimeField === "hours" ? "Est. Hours" : bulkTimeField === "budget" ? "Budget ($)" : "Pay Rate ($)"}</label>
+                        <input style={{ ...T.inp, fontSize: 12, height: 36 }} placeholder={bulkTimeField === "time" ? "e.g. 9:00am" : bulkTimeField === "hours" ? "e.g. 4" : "e.g. 150"} value={bulkTimeValue} onChange={e => setBulkTimeValue(e.target.value)} onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
                       </div>
                       <button disabled={!bulkTimeSelected.length || !bulkTimeValue.trim()} onClick={() => {
                         setSites(prev => prev.map((s, idx) => {
@@ -3111,10 +3133,18 @@ export default function App() {
                             const arr = [...(s.startTimes || [])];
                             arr[bulkTimeDay] = bulkTimeValue.trim();
                             return { ...s, startTimes: arr };
-                          } else {
+                          } else if (bulkTimeField === "hours") {
                             const arr = [...(s.hours || [])];
                             arr[bulkTimeDay] = bulkTimeValue.trim();
                             return { ...s, hours: arr };
+                          } else if (bulkTimeField === "budget") {
+                            const arr = [...(s.budgetTechs || [])];
+                            arr[bulkTimeDay] = bulkTimeValue.trim();
+                            return { ...s, budgetTechs: arr };
+                          } else {
+                            const arr = [...(s.payRates || [])];
+                            arr[bulkTimeDay] = bulkTimeValue.trim();
+                            return { ...s, payRates: arr };
                           }
                         }));
                       }} style={{ padding: "8px 14px", borderRadius: 8, border: "none", height: 36, background: (!bulkTimeSelected.length || !bulkTimeValue.trim()) ? T.disabledBg : `linear-gradient(135deg,${T.accent},#dc6209)`, color: (!bulkTimeSelected.length || !bulkTimeValue.trim()) ? T.disabledText : "#000", cursor: (!bulkTimeSelected.length || !bulkTimeValue.trim()) ? "not-allowed" : "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5, whiteSpace: "nowrap" }}>APPLY</button>
@@ -3132,7 +3162,9 @@ export default function App() {
                   const days = Array.from({ length: numDays }, (_, i) => i);
                   const startTimes = site.startTimes || [];
                   const hoursVals = site.hours || [];
-                  const anyOverride = startTimes.some(Boolean) || hoursVals.some(v => v !== "" && v !== undefined);
+                  const budgetVals = site.budgetTechs || [];
+                  const payVals = site.payRates || [];
+                  const anyOverride = startTimes.some(Boolean) || hoursVals.some(v => v !== "" && v !== undefined) || budgetVals.some(v => v !== "" && v !== undefined) || payVals.some(v => v !== "" && v !== undefined);
                   return (
                     <div key={realIdx} style={{ background: T.surface2, border: `1px solid ${anyOverride ? T.accent : T.border}`, borderRadius: 10, padding: "0.85rem 1rem" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -3148,7 +3180,7 @@ export default function App() {
                           </div>
                         </div>
                         {anyOverride && (
-                          <button onClick={() => setSites(prev => prev.map((s, idx) => idx === realIdx ? { ...s, startTimes: [], hours: [] } : s))}
+                          <button onClick={() => setSites(prev => prev.map((s, idx) => idx === realIdx ? { ...s, startTimes: [], hours: [], budgetTechs: [], payRates: [] } : s))}
                             style={{ background: "transparent", border: "none", color: T.textFaint, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>clear</button>
                         )}
                       </div>
@@ -3191,6 +3223,46 @@ export default function App() {
                               }}
                               onFocus={e => e.target.style.borderColor = T.accent}
                               onBlur={e => e.target.style.borderColor = (hoursVals[d] !== "" && hoursVals[d] !== undefined) ? T.accent : T.border2}
+                            />
+                          </div>
+                        ))}
+                      </div>{/* - */}
+                      <div style={{ fontSize: 9, color: T.textFaint, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1 }}>Budget ($)</div>
+                      <div style={{ display: "grid", gridTemplateColumns: `repeat(${numDays}, 1fr)`, gap: 8, marginBottom: 10 }}>
+                        {days.map(d => (
+                          <div key={d}>
+                            <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>{dayLabel(site.date, d)}</label>
+                            <input
+                              style={{ ...T.inp, fontSize: 12, ...(budgetVals[d] !== "" && budgetVals[d] !== undefined ? { borderColor: T.accent } : {}) }}
+                              placeholder={site.budgetTech || woConfig.budgetTech || "default"}
+                              value={budgetVals[d] !== undefined ? budgetVals[d] : ""}
+                              onChange={e => {
+                                const arr = [...budgetVals];
+                                arr[d] = e.target.value;
+                                setSites(prev => prev.map((s, idx) => idx === realIdx ? { ...s, budgetTechs: arr } : s));
+                              }}
+                              onFocus={e => e.target.style.borderColor = T.accent}
+                              onBlur={e => e.target.style.borderColor = (budgetVals[d] !== "" && budgetVals[d] !== undefined) ? T.accent : T.border2}
+                            />
+                          </div>
+                        ))}
+                      </div>{/* - */}
+                      <div style={{ fontSize: 9, color: T.textFaint, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1 }}>Pay Rate ($)</div>
+                      <div style={{ display: "grid", gridTemplateColumns: `repeat(${numDays}, 1fr)`, gap: 8 }}>
+                        {days.map(d => (
+                          <div key={d}>
+                            <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>{dayLabel(site.date, d)}</label>
+                            <input
+                              style={{ ...T.inp, fontSize: 12, ...(payVals[d] !== "" && payVals[d] !== undefined ? { borderColor: T.accent } : {}) }}
+                              placeholder={site.payRate || woConfig.payRate || "default"}
+                              value={payVals[d] !== undefined ? payVals[d] : ""}
+                              onChange={e => {
+                                const arr = [...payVals];
+                                arr[d] = e.target.value;
+                                setSites(prev => prev.map((s, idx) => idx === realIdx ? { ...s, payRates: arr } : s));
+                              }}
+                              onFocus={e => e.target.style.borderColor = T.accent}
+                              onBlur={e => e.target.style.borderColor = (payVals[d] !== "" && payVals[d] !== undefined) ? T.accent : T.border2}
                             />
                           </div>
                         ))}
