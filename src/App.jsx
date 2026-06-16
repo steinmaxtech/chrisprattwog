@@ -72,7 +72,7 @@ const WO_TYPES = {
   INT:  { label: "INT — Installation Technician",        siteIdSuffix: "INT",    numTechs: 1, numDays: 1, useBundle: true  },
   INL:  { label: "INL — Installation Lead",              siteIdSuffix: "INL",    numTechs: 1, numDays: 1, useBundle: true  },
   WRK:  { label: "WRK — Walk In Ready Kit",            siteIdSuffix: "WRK",    numTechs: 1, numDays: 1, useBundle: false },
-  SDT:  { label: "SDT — Security Device Technician", siteIdSuffix: "SDT",    numTechs: 1, numDays: 3, useBundle: true  },
+  SDT:  { label: "SDT — Security Device Technician", siteIdSuffix: "SDT",    numTechs: 1, numDays: 4, useBundle: true  },
 };
 
 // Default configs per type — blank, user fills in each run
@@ -98,18 +98,19 @@ function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
   const cfgPay = Number(cfg.payRate);
   const hours = Number(cfg.approxHours);
 
-  // SDT — Security Device Technician: fixed 9-row bundled schedule across 3 days
+  // SDT — Security Device Technician: fixed 10-row bundled schedule across 4 days
   if (woType === "SDT") {
     const SDT_SCHEDULE = [
-      { day: 0, suffix: "AH(1)", bundle: "AH", time: "2:00pm", hours: 10, amount: 650 },
-      { day: 1, suffix: "BH(1)", bundle: "BH", time: "11:00am", hours: 8,  amount: 450 },
-      { day: 1, suffix: "BH(2)", bundle: "BH", time: "11:00am", hours: 8,  amount: 450 },
-      { day: 1, suffix: "AH(1)", bundle: "AH", time: "4:00pm",  hours: 10, amount: 600 },
-      { day: 1, suffix: "AH(2)", bundle: "AH", time: "5:00pm",  hours: 9,  amount: 550 },
-      { day: 2, suffix: "BH(1)", bundle: "BH", time: "11:00am", hours: 8,  amount: 450 },
-      { day: 2, suffix: "BH(2)", bundle: "BH", time: "11:00am", hours: 8,  amount: 450 },
-      { day: 2, suffix: "AH(1)", bundle: "AH", time: "4:00pm",  hours: 10, amount: 600 },
-      { day: 2, suffix: "AH(2)", bundle: "AH", time: "5:00pm",  hours: 9,  amount: 550 },
+      { day: 0, suffix: "AH(1)", bundle: "AH", time: "1:00pm",  hours: 10, amount: 400 },
+      { day: 1, suffix: "AH(1)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
+      { day: 1, suffix: "AH(2)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
+      { day: 1, suffix: "AH(3)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
+      { day: 2, suffix: "AH(1)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
+      { day: 2, suffix: "AH(2)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
+      { day: 2, suffix: "AH(3)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
+      { day: 3, suffix: "AH(1)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
+      { day: 3, suffix: "AH(2)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
+      { day: 3, suffix: "AH(3)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
     ];
     const sdtTid = cfg.templateId ? Number(cfg.templateId) : 104516;
     for (const entry of SDT_SCHEDULE) {
@@ -1302,6 +1303,18 @@ export default function App() {
       return labelLike && hasKnownLabel;
     };
 
+    // Extract a Work Order Manager name from the end of a row, e.g. "Adrian LaBeaud (06/08)" → "Adrian LaBeaud"
+    // Only checks the last non-empty cell — if it doesn't look like a name, returns "" rather than guessing.
+    const extractWOM = (cols) => {
+      for (let i = cols.length - 1; i >= 0; i--) {
+        const cell = (cols[i] || "").trim();
+        if (!cell) continue;
+        const m = cell.match(/^([A-Za-z][A-Za-z'.\-]*(?:\s+[A-Za-z][A-Za-z'.\-]*)+)\s*(?:\(\d{1,2}\/\d{1,2}\))?$/);
+        return m ? m[1].trim() : "";
+      }
+      return "";
+    };
+
     // Detect Format 4 / Format 5: services sheet variants
     // Format 4: code(0) | branchName(1) | services(2) | quarter(3) | region(4) | address(5) | city(6) | state(7) | zip(8) | fullAddr(9) | status(10) | date(11)
     // Format 5: code(0) | branchName(1) | quarter(2) | region(3) | address(4) | city(5) | state(6) | zip(7) | fullAddr(8) | bool(9) | status(10) | date(11)
@@ -1326,6 +1339,7 @@ export default function App() {
         let state   = cols[7] || "";
         let zip     = cols[8] || "";
         let date    = parseDate(cols[11] || "");
+        const womId = extractWOM(cols);
         if (!/^\d{5}(-\d{4})?$/.test(zip)) {
           for (let ci = 5; ci < cols.length; ci++) {
             if (/^\d{5}(-\d{4})?$/.test(cols[ci])) {
@@ -1333,13 +1347,15 @@ export default function App() {
               state   = cols[ci - 1] || state;
               city    = cols[ci - 2] || city;
               address = cols[ci - 3] || address;
-              const lastDateCol = [...cols].reverse().find(c => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(c));
-              if (lastDateCol) date = parseDate(lastDateCol);
+              // Date is the FIRST date-like column after the zip (e.g. Start Date), not the last —
+              // some exports have multiple trailing dates (start/end/created) plus a WOM name at the end.
+              const firstDateCol = cols.slice(ci + 1).find(c => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test((c || "").trim()));
+              if (firstDateCol) date = parseDate(firstDateCol);
               break;
             }
           }
         }
-        return { code: cols[0] || "", branchName: cols[1] || "", address, address2: "", city, state, zip, date, ...siteDefaults };
+        return { code: cols[0] || "", branchName: cols[1] || "", address, address2: "", city, state, zip, date, womId, ...siteDefaults };
       });
     } else if (isFormat5) {
       // Format 5: code | branchName | quarter | region | address | city | state | zip | fullAddr | bool | status | date
@@ -1351,6 +1367,7 @@ export default function App() {
         let state   = cols[6] || "";
         let zip     = cols[7] || "";
         let date    = parseDate(cols[11] || "");
+        const womId = extractWOM(cols);
         // Safety check: if zip looks wrong (not a zip code), scan all cols for a 5-digit zip
         if (!/^\d{5}(-\d{4})?$/.test(zip)) {
           for (let ci = 4; ci < cols.length; ci++) {
@@ -1359,14 +1376,14 @@ export default function App() {
               state   = cols[ci - 1] || state;
               city    = cols[ci - 2] || city;
               address = cols[ci - 3] || address;
-              // Date is last non-empty col that looks like a date
-              const lastDateCol = [...cols].reverse().find(c => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(c));
-              if (lastDateCol) date = parseDate(lastDateCol);
+              // Date is the first date-like column after the zip (e.g. Start Date)
+              const firstDateCol = cols.slice(ci + 1).find(c => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test((c || "").trim()));
+              if (firstDateCol) date = parseDate(firstDateCol);
               break;
             }
           }
         }
-        return { code: cols[0] || "", branchName: cols[1] || "", address, address2: "", city, state, zip, date, ...siteDefaults };
+        return { code: cols[0] || "", branchName: cols[1] || "", address, address2: "", city, state, zip, date, womId, ...siteDefaults };
       });
     } else if (isBuildingFormat) {
       // Format 2 (tab, with headers): buildingcode, buildingname, address, city, state, zip
