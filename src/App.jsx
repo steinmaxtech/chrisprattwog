@@ -72,7 +72,7 @@ const WO_TYPES = {
   INT:  { label: "INT — Installation Technician",        siteIdSuffix: "INT",    numTechs: 1, numDays: 1, useBundle: true  },
   INL:  { label: "INL — Installation Lead",              siteIdSuffix: "INL",    numTechs: 1, numDays: 1, useBundle: true  },
   WRK:  { label: "WRK — Walk In Ready Kit",            siteIdSuffix: "WRK",    numTechs: 1, numDays: 1, useBundle: false },
-  SDT:  { label: "SDT — Security Device Technician", siteIdSuffix: "SDT",    numTechs: 1, numDays: 4, useBundle: true  },
+  SDT:  { label: "SDT — Security Device Technician", siteIdSuffix: "SDT",    numTechs: 3, numDays: 4, useBundle: true  },
 };
 
 // Default configs per type — blank, user fills in each run
@@ -98,27 +98,29 @@ function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
   const cfgPay = Number(cfg.payRate);
   const hours = Number(cfg.approxHours);
 
-  // SDT — Security Device Technician: fixed 10-row bundled schedule across 4 days
+  // SDT — Security Device Technician: fixed 10-row schedule across 4 days, 3 separate technicians
   if (woType === "SDT") {
     const SDT_SCHEDULE = [
-      { day: 0, suffix: "AH(1)", bundle: "AH", time: "1:00pm",  hours: 10, amount: 400 },
-      { day: 1, suffix: "AH(1)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
-      { day: 1, suffix: "AH(2)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
-      { day: 1, suffix: "AH(3)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
-      { day: 2, suffix: "AH(1)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
-      { day: 2, suffix: "AH(2)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
-      { day: 2, suffix: "AH(3)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
-      { day: 3, suffix: "AH(1)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
-      { day: 3, suffix: "AH(2)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
-      { day: 3, suffix: "AH(3)", bundle: "AH", time: "11:00am", hours: 12, amount: 650 },
+      { day: 0, suffix: "AH(1)", bundle: "AH1", techSlot: 0, time: "1:00pm",  hours: 10, amount: 400 },
+      { day: 1, suffix: "AH(1)", bundle: "AH1", techSlot: 0, time: "11:00am", hours: 12, amount: 650 },
+      { day: 1, suffix: "AH(2)", bundle: "AH2", techSlot: 1, time: "11:00am", hours: 12, amount: 650 },
+      { day: 1, suffix: "AH(3)", bundle: "AH3", techSlot: 2, time: "11:00am", hours: 12, amount: 650 },
+      { day: 2, suffix: "AH(1)", bundle: "AH1", techSlot: 0, time: "11:00am", hours: 12, amount: 650 },
+      { day: 2, suffix: "AH(2)", bundle: "AH2", techSlot: 1, time: "11:00am", hours: 12, amount: 650 },
+      { day: 2, suffix: "AH(3)", bundle: "AH3", techSlot: 2, time: "11:00am", hours: 12, amount: 650 },
+      { day: 3, suffix: "AH(1)", bundle: "AH1", techSlot: 0, time: "11:00am", hours: 12, amount: 650 },
+      { day: 3, suffix: "AH(2)", bundle: "AH2", techSlot: 1, time: "11:00am", hours: 12, amount: 650 },
+      { day: 3, suffix: "AH(3)", bundle: "AH3", techSlot: 2, time: "11:00am", hours: 12, amount: 650 },
     ];
     const sdtTid = cfg.templateId ? Number(cfg.templateId) : 104516;
     for (const entry of SDT_SCHEDULE) {
       const date = addDays(site.date, entry.day);
       const siteId = `${site.code}-SDT-${entry.suffix}`;
+      // Each tech slot (AH1/AH2/AH3) bundles separately — they're 3 different technicians,
+      // not one shared engagement. AH1 spans all 4 days (1 person); AH2/AH3 only Days 2–4.
       const bundle = `${site.code}-SDT-${entry.bundle}`;
       const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
-      rows.push(makeRow({ templateId: sdtTid, projectId, siteId, bundle, site, date, startTime: normalizeTime(entry.time), endTime: "", techType: cfg.techType || "Tech", budgetTech: entry.amount, maxBudget: entry.amount, payRate: entry.amount, approxHours: entry.hours, estDuration: entry.hours, country: cfg.country, locName, payType: "Fixed", routeTo: (site.routeToTechs || [])[0] || "" }));
+      rows.push(makeRow({ templateId: sdtTid, projectId, siteId, bundle, site, date, startTime: normalizeTime(entry.time), endTime: "", techType: cfg.techType || "Tech", budgetTech: entry.amount, maxBudget: entry.amount, payRate: entry.amount, approxHours: entry.hours, estDuration: entry.hours, country: cfg.country, locName, payType: "Fixed", routeTo: (site.routeToTechs || [])[entry.techSlot] || "" }));
     }
     return rows;
   }
@@ -3594,4 +3596,3 @@ export default function App() {
     </div>
   );
 }
-
