@@ -220,7 +220,7 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
             </div>
           )}
         </div>
-        {woType && (() => { const wot=ALL_WO_TYPES[woType]||{}; if (woType==="SDT") return <div style={{ fontSize:11, color:T.textFaint, marginTop:6 }}>9 work orders × 3 days (fixed schedule, bundled AH/BH)</div>; return <div style={{ fontSize:11, color:T.textFaint, marginTop:6 }}>{wot.numTechs} tech{wot.numTechs>1?"s":""} × {wot.numDays} day{wot.numDays>1?"s":""}</div>; })()}
+        {woType && (() => { const wot=ALL_WO_TYPES[woType]||{}; if (woType==="SDT") return <div style={{ fontSize:11, color:T.textFaint, marginTop:6 }}>10 work orders × 4 days (fixed schedule, bundled AH)</div>; return <div style={{ fontSize:11, color:T.textFaint, marginTop:6 }}>{wot.numTechs} tech{wot.numTechs>1?"s":""} × {wot.numDays} day{wot.numDays>1?"s":""}</div>; })()}
         {adminUnlocked && <button onClick={() => { setEditingCustomKey(null); setCustomForm({key:"",label:"",siteIdSuffix:"",numTechs:"1",numDays:"1",useBundle:false}); setShowCustomModal(true); }} style={{ marginTop:8, width:"100%", background:"transparent", border:`1px dashed ${T.border2}`, borderRadius:10, padding:"10px", color:T.textDim, cursor:"pointer", fontSize:12, fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }} onMouseEnter={e=>e.currentTarget.style.borderColor=T.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=T.border2}><span style={{fontSize:16}}>＋</span> Add Custom WO Type</button>}
         {adminUnlocked && Object.keys(deletedBuiltins||{}).length>0 && <button onClick={()=>setShowRecoverModal(true)} style={{ marginTop:6, width:"100%", background:"transparent", border:"1px dashed #22c55e", borderRadius:10, padding:"8px", color:"#22c55e", cursor:"pointer", fontSize:12, fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>↩ Recover Deleted ({Object.keys(deletedBuiltins||{}).length})</button>}
       </div>
@@ -262,7 +262,7 @@ export default function Step0Advanced({ T, woType, setWoType, setWoConfig, WO_DE
             <FieldInput label="Country" value={woConfig.country} onChange={e=>setWoConfig(p=>({...p,country:e.target.value}))} ph="US" T={T} />
           </div>
           <div style={{ marginTop: 12, padding: "10px 12px", background: T.surface2, borderRadius: 7, fontSize: 11, color: T.textFaint, lineHeight: 1.7 }}>
-            SDT generates a fixed <span style={{color:T.textMid}}>9-row, 3-day schedule</span> per site (1 AH on Day 1, then 2 BH + 2 AH on Days 2 and 3), bundled separately by AH/BH group. Site IDs follow <span style={{color:T.textMid}}>xxxx-SDT-AH(#)</span> / <span style={{color:T.textMid}}>xxxx-SDT-BH(#)</span>. Pay is Fixed per row ($450–$650) and isn't configurable here.
+            SDT generates a fixed <span style={{color:T.textMid}}>10-row, 4-day schedule</span> per site (1 AH on Day 1 from 1pm–11pm, then 3 AH techs on Days 2–4 from 11am–11pm), bundled together as one AH group. Site IDs follow <span style={{color:T.textMid}}>xxxx-SDT-AH(#)</span>. Pay is Fixed per row ($400 Day 1, $650 Days 2–4) and isn't configurable here.
           </div>
         </div>
       )}
