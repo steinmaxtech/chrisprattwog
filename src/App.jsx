@@ -513,6 +513,9 @@ export default function App() {
   const [showRecoverModal, setShowRecoverModal] = useState(false);
   const [showRoutePanel, setShowRoutePanel] = useState(false);
   const [showTimesPanel, setShowTimesPanel] = useState(false);
+  const [showWomPanel, setShowWomPanel] = useState(false);
+  const [bulkWomSelected, setBulkWomSelected] = useState([]);
+  const [bulkWomValue, setBulkWomValue] = useState("");
   const [routePasteText, setRoutePasteText] = useState("");
   const [fnVerifyResults, setFnVerifyResults] = useState({}); // { [id]: { status, name, role, source } }
   const [fnVerifying, setFnVerifying] = useState(false);
@@ -1883,12 +1886,20 @@ export default function App() {
         {/* STEP 1: Add Sites */}
         {step === 1 && (
           <div>
-            <div style={{ display: "flex", borderBottom: `1px solid ${T.border}`, marginBottom: 16 }}>
+            <div style={{ display: "flex", borderBottom: `1px solid ${T.border}`, marginBottom: 16, alignItems: "center" }}>
               <button className={`tab-btn${pasteMode && !importMode ? " active" : ""}`} onClick={() => { setPasteMode(true); setImportMode(false); }}>⌘ Paste from Spreadsheet</button>
               <button className={`tab-btn${!pasteMode && !importMode ? " active" : ""}`} onClick={() => { setPasteMode(false); setImportMode(false); setGridMode(false); }}>✎ Edit Table ({sites.length} rows)</button>
               <button className={`tab-btn${importMode ? " active" : ""}`} onClick={() => { setImportMode(true); setPasteMode(false); setGridMode(false); }}>⬆ Import CSV</button>
+              {(() => {
+                const womCount = sites.filter(s => rowComplete(s) && s.womId).length;
+                return (
+                  <button onClick={() => setShowWomPanel(true)} style={{ marginLeft: pasteMode || importMode ? "auto" : 12, background: womCount > 0 ? `${T.accent}18` : "transparent", border: `1px solid ${womCount > 0 ? T.accent : T.border2}`, borderRadius: 6, padding: "4px 12px", color: womCount > 0 ? T.accentHi : T.textMid, cursor: "pointer", fontSize: 11, fontFamily: "inherit", alignSelf: "center", whiteSpace: "nowrap" }}>
+                    📋 Work Order Managers{womCount > 0 ? ` (${womCount})` : ""}
+                  </button>
+                );
+              })()}
               {!pasteMode && !importMode && (
-                <button onClick={() => setClearConfirm(true)} style={{ marginLeft: "auto", background: "transparent", border: "1px solid #ef4444", borderRadius: 6, padding: "4px 12px", color: "#ef4444", cursor: "pointer", fontSize: 11, fontFamily: "inherit", alignSelf: "center" }}>
+                <button onClick={() => setClearConfirm(true)} style={{ marginLeft: 12, background: "transparent", border: "1px solid #ef4444", borderRadius: 6, padding: "4px 12px", color: "#ef4444", cursor: "pointer", fontSize: 11, fontFamily: "inherit", alignSelf: "center" }}>
                   ✕ Clear All
                 </button>
               )}
@@ -2172,6 +2183,15 @@ export default function App() {
                               const isEmpty = required && !site[col.key];
                               return (
                                 <td key={col.key} style={{ padding: "2px 2px", borderBottom: `1px solid ${T.borderRow}`, borderRight: `1px solid ${T.border}`, background: isEmpty && !cellActive ? "rgba(239,68,68,0.04)" : "transparent" }}>
+                                  {woType === "SDT" && ["numTechs", "numDays", "budgetTech", "payRate"].includes(col.key) ? (
+                                    <div title={
+                                      col.key === "numTechs" ? "SDT fixed schedule: 1 tech Day 1, 3 techs Days 2–4" :
+                                      col.key === "numDays" ? "SDT fixed schedule: always 4 days" :
+                                      "SDT fixed pricing: $400 Day 1, $650 Days 2–4 — not configurable per site"
+                                    } style={{ width: "100%", padding: "6px 8px", color: T.textFaint, fontSize: 10, fontFamily: "inherit", textAlign: "center", cursor: "help" }}>
+                                      {col.key === "numTechs" ? "1,3,3,3" : col.key === "numDays" ? "4" : "Fixed"}
+                                    </div>
+                                  ) : (
                                   <input
                                     ref={el => inputRefs.current[`${rowIdx}-${colIdx}`] = el}
                                     type={col.type || "text"}
@@ -2182,6 +2202,7 @@ export default function App() {
                                     placeholder={col.key === 'numTechs' ? (woConfig.numTechs || col.ph) : col.key === 'numDays' ? (woConfig.numDays || col.ph) : col.key === 'date' ? (woConfig.defaultDate || col.ph) : col.key === 'budgetTech' ? (woConfig.budgetTech || col.ph) : col.key === 'payRate' ? (woConfig.payRate || col.ph) : col.ph}
                                     style={{ width: "100%", background: col.key === 'date' && isPastDate(site[col.key] || (col.key === 'date' ? woConfig.defaultDate : '')) ? 'rgba(239,68,68,0.15)' : "transparent", border: "none", borderColor: col.key === 'date' && isPastDate(site[col.key] || (col.key === 'date' ? woConfig.defaultDate : '')) ? '#ef4444' : undefined, padding: "6px 8px", color: T.text, fontSize: 12, fontFamily: "inherit", outline: cellActive ? "2px solid #e97316" : "none", outlineOffset: "-1px", borderRadius: 3 }}
                                   />
+                                  )}
                                 </td>
                               );
                             })}
@@ -3292,6 +3313,71 @@ export default function App() {
               {/* Footer */}
               <div style={{ padding: "1rem 1.5rem", borderTop: `1px solid ${T.border}`, position: "sticky", bottom: 0, background: T.surface }}>
                 <button onClick={() => setShowTimesPanel(false)} style={{ width: "100%", padding: "10px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}>DONE</button>
+              </div>{/* - */}
+
+            </div>{/* - */}
+          </div>
+        )}
+
+        {/* Work Order Managers panel */}
+        {showWomPanel && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 400, display: "flex", alignItems: "flex-start", justifyContent: "flex-end" }} onClick={() => setShowWomPanel(false)}>
+            <div style={{ background: T.surface, borderLeft: `2px solid ${T.accent}`, height: "100%", width: "100%", maxWidth: 420, overflowY: "auto", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div style={{ padding: "1.25rem 1.5rem", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, background: T.surface, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: 3, color: T.accentHi }}>📋 WORK ORDER MANAGERS</div>
+                  <div style={{ fontSize: 11, color: T.textFaint, marginTop: 2 }}>Auto-filled from pasted data where detected · edit or fill in the rest · blank = none</div>
+                </div>
+                <button onClick={() => setShowWomPanel(false)} style={{ background: "transparent", border: "none", color: T.textMid, cursor: "pointer", fontSize: 20, flexShrink: 0 }}>✕</button>
+              </div>
+
+              {/* Bulk apply toolbar */}
+              <div style={{ padding: "0.85rem 1.5rem", borderBottom: `1px solid ${T.border}`, background: T.surface2 }}>
+                <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>Bulk Apply — {bulkWomSelected.length} site{bulkWomSelected.length !== 1 ? "s" : ""} selected</div>
+                <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <label style={{ display: "block", fontSize: 9, color: T.textFaint, marginBottom: 3 }}>Work Order Manager</label>
+                    <input style={{ ...T.inp, fontSize: 12, height: 36 }} placeholder="e.g. Adrian LaBeaud" value={bulkWomValue} onChange={e => setBulkWomValue(e.target.value)} onFocus={e => e.target.style.borderColor = T.accent} onBlur={e => e.target.style.borderColor = T.border2} />
+                  </div>
+                  <button disabled={!bulkWomSelected.length || !bulkWomValue.trim()} onClick={() => {
+                    setSites(prev => prev.map((s, idx) => bulkWomSelected.includes(idx) ? { ...s, womId: bulkWomValue.trim() } : s));
+                  }} style={{ padding: "8px 14px", borderRadius: 8, border: "none", height: 36, background: (!bulkWomSelected.length || !bulkWomValue.trim()) ? T.disabledBg : `linear-gradient(135deg,${T.accent},#dc6209)`, color: (!bulkWomSelected.length || !bulkWomValue.trim()) ? T.disabledText : "#000", cursor: (!bulkWomSelected.length || !bulkWomValue.trim()) ? "not-allowed" : "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5, whiteSpace: "nowrap" }}>APPLY</button>
+                  <button onClick={() => setBulkWomSelected(sites.map((s, idx) => rowComplete(s) ? idx : null).filter(v => v !== null))} style={{ padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border2}`, height: 36, background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>Select all</button>
+                  {bulkWomSelected.length > 0 && <button onClick={() => setBulkWomSelected([])} style={{ padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border2}`, height: 36, background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 11, fontFamily: "inherit", whiteSpace: "nowrap" }}>Clear selection</button>}
+                </div>
+              </div>
+
+              {/* Per-site list */}
+              <div style={{ flex: 1, padding: "1rem 1.5rem", display: "flex", flexDirection: "column", gap: 10 }}>
+                {sites.map((site, realIdx) => rowComplete(site) ? (
+                  <div key={realIdx} style={{ background: T.surface2, border: `1px solid ${site.womId ? T.accent : T.border}`, borderRadius: 10, padding: "0.7rem 0.85rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                      <div onClick={() => setBulkWomSelected(prev => prev.includes(realIdx) ? prev.filter(i => i !== realIdx) : [...prev, realIdx])} style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${bulkWomSelected.includes(realIdx) ? T.accent : T.border2}`, background: bulkWomSelected.includes(realIdx) ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
+                        {bulkWomSelected.includes(realIdx) && <span style={{ color: "#000", fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 13, letterSpacing: 1.5, color: site.womId ? T.accentHi : T.textMid }}>
+                          {site.code}{site.branchName ? ` — ${site.branchName}` : ""}
+                        </div>
+                      </div>
+                    </div>
+                    <input
+                      value={site.womId || ""}
+                      onChange={e => setSites(prev => prev.map((s, idx) => idx === realIdx ? { ...s, womId: e.target.value } : s))}
+                      placeholder="Work Order Manager name"
+                      style={{ width: "100%", boxSizing: "border-box", background: site.womId ? `${T.accent}12` : T.surface, border: `1px solid ${site.womId ? T.accent : T.border2}`, borderRadius: 6, padding: "6px 10px", color: T.text, fontSize: 12, fontFamily: "inherit" }}
+                      onFocus={e => e.target.style.borderColor = T.accent}
+                      onBlur={e => e.target.style.borderColor = site.womId ? T.accent : T.border2}
+                    />
+                  </div>
+                ) : null)}
+              </div>
+
+              {/* Footer */}
+              <div style={{ padding: "1rem 1.5rem", borderTop: `1px solid ${T.border}`, position: "sticky", bottom: 0, background: T.surface }}>
+                <button onClick={() => setShowWomPanel(false)} style={{ width: "100%", padding: "10px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${T.accent},#dc6209)`, color: "#000", cursor: "pointer", fontFamily: "'Bebas Neue',sans-serif", fontSize: 16, letterSpacing: 2 }}>DONE</button>
               </div>{/* - */}
 
             </div>{/* - */}
