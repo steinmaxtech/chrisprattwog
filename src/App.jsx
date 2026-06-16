@@ -90,7 +90,13 @@ const WO_DEFAULTS = {
 
 // Build rows using live woConfig values
 function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
-  const locPrefix = displayName.trim() || projectId;
+  // Location name prefix is the optional Display Name only — never falls back to
+  // Project ID, since Project ID includes the PO number and shouldn't appear in
+  // the site's Location Display Name / Location Name columns.
+  const locPrefix = displayName.trim();
+  // Builds the site's display/location name. Omits the prefix entirely (no dangling
+  // hyphen) when no Display Name was set, instead of falling back to Project ID.
+  const buildLocName = (siteId, s) => locPrefix ? `${locPrefix}-${siteId}-${s.city}, ${s.state}` : `${siteId}-${s.city}, ${s.state}`;
   const meta = (allTypes || {})[woType] || WO_TYPES[woType] || { siteIdSuffix: woType, numTechs: 1, numDays: 1, useBundle: false };
   const rows = [];
   const tId = Number(cfg.templateId);
@@ -119,7 +125,7 @@ function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
       // Each tech slot (AH1/AH2/AH3) bundles separately — they're 3 different technicians,
       // not one shared engagement. AH1 spans all 4 days (1 person); AH2/AH3 only Days 2–4.
       const bundle = `${site.code}-SDT-${entry.bundle}`;
-      const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
+      const locName = buildLocName(siteId, site);
       rows.push(makeRow({ templateId: sdtTid, projectId, siteId, bundle, site, date, startTime: normalizeTime(entry.time), endTime: "", techType: cfg.techType || "Tech", budgetTech: entry.amount, maxBudget: entry.amount, payRate: entry.amount, approxHours: entry.hours, estDuration: entry.hours, country: cfg.country, locName, payType: "Fixed", routeTo: (site.routeToTechs || [])[entry.techSlot] || "" }));
     }
     return rows;
@@ -169,7 +175,7 @@ function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
         const dayBudget = budgetForDay(d);
         const dayPay = payForDay(d);
         const siteId = `${site.code}-${meta.siteIdSuffix}(${t})`;
-        const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
+        const locName = buildLocName(siteId, site);
         rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: start, endTime: end, techType: cfg.techType, budgetTech: dayBudget, maxBudget: dayBudget, payRate: dayPay, approxHours: dayHours, estDuration: dayHours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[t - 1] || "" }));
       }
     }
@@ -181,7 +187,7 @@ function buildRows(site, projectId, displayName, woType, cfg, allTypes) {
       const dayBudget = budgetForDay(d);
       const dayPay = payForDay(d);
       const siteId = `${site.code}-${meta.siteIdSuffix}`;
-      const locName = `${locPrefix}-${siteId}-${site.city}, ${site.state}`;
+      const locName = buildLocName(siteId, site);
       rows.push(makeRow({ templateId: tId, projectId, siteId, bundle: meta?.useBundle ? siteId : "", site, date, startTime: start, endTime: end, techType: cfg.techType, budgetTech: dayBudget, maxBudget: dayBudget, payRate: dayPay, approxHours: dayHours, estDuration: dayHours, country: cfg.country, locName, payType: cfg.payType || "Fixed", routeTo: (site.routeToTechs || [])[0] || "" }));
     }
     if (numDays > 1) rows.push([]);
